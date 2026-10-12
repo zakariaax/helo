@@ -13,6 +13,29 @@ import checker
 import server
 
 
+class PresetTests(unittest.TestCase):
+    def test_sets_are_real_iana_lists(self) -> None:
+        presets = checker.load_presets()
+        all_tlds = presets["all"]
+        famous = presets["famous"]
+        launch = presets["launch"]
+        countries = presets["countries"]
+        self.assertGreater(len(all_tlds), 1400)
+        self.assertEqual(len(famous), 400)
+        self.assertEqual(famous[0], "com")
+        self.assertEqual(all_tlds[0], "com")
+        self.assertTrue(set(famous) <= set(all_tlds))
+        self.assertTrue(set(launch) <= set(all_tlds))
+        self.assertTrue(set(countries) <= set(all_tlds))
+        self.assertTrue(all(len(tld) == 2 for tld in countries))
+        self.assertIn("ai", launch)
+        self.assertIn("io", launch)
+        self.assertLessEqual(len(all_tlds), checker.MAX_TLDS)
+        outcome = checker.parse_input("brand", "\n".join(famous[:50]))
+        self.assertIsNone(outcome.error)
+        self.assertEqual(len(outcome.tlds), 50)
+
+
 class ParseTests(unittest.TestCase):
     def test_plain_label_and_noise(self) -> None:
         outcome = checker.parse_input("  MyApp  \n\n# comment\nbrandname\n", "COM\n net ")

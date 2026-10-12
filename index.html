@@ -60,6 +60,16 @@
   .card h2 { margin: 0 0 8px; font-size: 22px; }
   .card p, .recommend p { margin: 0; color: var(--muted); }
   .card p + p { margin-top: 8px; }
+  .presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 0 0 8px; }
+  .preset {
+    text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    padding: 12px 14px 14px; box-shadow: var(--shadow);
+  }
+  .preset.is-on { border-color: var(--accent); background: #f3faf6; box-shadow: inset 0 0 0 1px var(--accent); }
+  .preset .count { display: block; font-family: Palatino, "Palatino Linotype", Georgia, serif; font-size: 26px; line-height: 1; letter-spacing: -0.03em; }
+  .preset strong { display: block; margin-top: 6px; }
+  .preset small { display: block; margin-top: 4px; color: var(--muted); font-size: 13px; line-height: 1.35; }
+  .preset-note { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
   .editors { display: grid; grid-template-columns: 1.4fr 0.8fr; gap: 12px; margin-bottom: 12px; }
   label.field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
   .label-row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
@@ -131,13 +141,19 @@
   .status-word.available { color: var(--green); }
   .status-word.unknown { color: var(--amber); }
   .empty { padding: 28px 18px; color: var(--muted); }
+  .more-chips { border: 0; background: transparent; color: var(--muted); font-size: 12px; font-weight: 700; padding: 3px 2px; }
+  .more-chips:hover { color: var(--ink); }
+  .detail-scroll { max-height: 420px; overflow: auto; }
   .legend { color: var(--muted); font-size: 13px; margin: 8px 2px 0; }
   .footer-note { color: var(--muted); font-size: 13px; margin-top: 18px; }
   code { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 0.92em; }
   @media (max-width: 980px) {
-    .methods, .editors, header.top { grid-template-columns: 1fr; display: grid; }
+    .methods, .editors, .presets, header.top { grid-template-columns: 1fr; display: grid; }
     header.top { align-items: start; }
     h1 { font-size: 28px; }
+  }
+  @media (max-width: 720px) {
+    .presets { grid-template-columns: 1fr 1fr; }
   }
 </style>
 </head>
@@ -177,11 +193,35 @@
 
   <div id="banner"></div>
 
+  <div class="presets" role="group" aria-label="TLD sets">
+    <button type="button" class="preset is-on" data-preset="all" aria-pressed="true">
+      <span class="count" data-count="all">—</span>
+      <strong>All TLDs</strong>
+      <small>Every extension in the IANA root</small>
+    </button>
+    <button type="button" class="preset" data-preset="famous" aria-pressed="false">
+      <span class="count" data-count="famous">400</span>
+      <strong>Famous 400</strong>
+      <small>The biggest zones, by domains registered</small>
+    </button>
+    <button type="button" class="preset" data-preset="launch" aria-pressed="false">
+      <span class="count" data-count="launch">—</span>
+      <strong>Launch</strong>
+      <small>The short list worth buying for a new product</small>
+    </button>
+    <button type="button" class="preset" data-preset="countries" aria-pressed="false">
+      <span class="count" data-count="countries">—</span>
+      <strong>Countries</strong>
+      <small>The largest country-code extensions</small>
+    </button>
+  </div>
+  <p class="preset-note" id="preset-note">Loading the full IANA list…</p>
+
   <div class="editors">
     <label class="field">
       <div class="label-row"><strong>Names</strong><span id="name-count">0 names</span></div>
       <textarea id="names" spellcheck="false" autocomplete="off" placeholder="One name per line"></textarea>
-      <div class="hint">Second-level labels, like <code>brandname</code>. Full domains (<code>brand.com</code>), URLs, uppercase, and extra spaces are normalized. International names are checked in punycode. Up to 150 names and 40 TLDs per run.</div>
+      <div class="hint">Second-level labels, like <code>brandname</code>. Full domains (<code>brand.com</code>), URLs, uppercase, and extra spaces are normalized. International names are checked in punycode. Up to 150 names per run. The TLD box already holds every root extension.</div>
     </label>
     <label class="field">
       <div class="label-row"><strong>TLDs</strong><span id="tld-count">0 TLDs</span></div>
@@ -194,7 +234,6 @@
     <button class="primary" id="check" type="button">Check</button>
     <button class="danger" id="stop" type="button" hidden>Stop</button>
     <button class="ghost" id="example" type="button">Load example</button>
-    <button class="ghost" id="reset-tlds" type="button">Reset TLDs</button>
     <button class="ghost" id="recheck" type="button" hidden>Recheck unknowns</button>
     <button class="ghost" id="clear-cache" type="button">Clear tab cache</button>
   </div>
@@ -243,7 +282,16 @@
 <script>
 const CACHE_KEY = "tld-checker-cache-v1";
 const NAMES_KEY = "tld-checker-names";
-const TLDS_KEY = "tld-checker-tlds";
+const TLDS_KEY = "tld-checker-tlds-v2";
+const PRESET_KEY = "tld-checker-preset";
+const CHIP_CAP = 12;
+const CHECK_CHUNK = 400;
+const PRESET_COPY = {
+  all: "Every TLD in the IANA root is in the box, largest zones first. A full scan checks all of them.",
+  famous: "The 400 largest zones, ranked by how many domains each one holds.",
+  launch: "The short list worth buying for a new product. This is the fast check.",
+  countries: "The 80 largest country-code extensions, for an international sweep.",
+};
 const namesEl = document.getElementById("names");
 const tldsEl = document.getElementById("tlds");
 const bannerEl = document.getElementById("banner");
@@ -269,12 +317,17 @@ const state = {
   expanded: new Set(),
   defaultTldText: "",
   hasUnknown: false,
+  presetText: {},
+  activePreset: "all",
+  pendingPreset: "",
 };
 
 let cache = loadCache();
 let renderQueued = false;
 let cacheTimer = 0;
 let draftTimer = 0;
+let metricStamp = -1;
+const metricMemo = new Map();
 
 function loadCache() {
   try {
@@ -340,8 +393,58 @@ function renderCoverage() {
   const rdap = [];
   const dns = [];
   tlds.forEach((tld) => (tldHasRdap(tld) ? rdap : dns).push(tld));
-  const published = state.publication ? " IANA list published " + state.publication.slice(0, 10) + "." : "";
+  const published = state.publication ? " IANA RDAP list published " + state.publication.slice(0, 10) + "." : "";
+  if (tlds.length > 18) {
+    hint.textContent = rdap.length + " use RDAP. " + dns.length + " use a DNS hint." + published;
+    return;
+  }
   hint.textContent = "RDAP for " + (rdap.join(", ") || "none") + ". DNS hint only for " + (dns.join(", ") || "none") + "." + published;
+}
+
+function formatCount(value) {
+  return Number(value).toLocaleString();
+}
+
+function paintPresets() {
+  document.querySelectorAll(".preset").forEach((button) => {
+    const on = button.dataset.preset === state.activePreset;
+    button.classList.toggle("is-on", on);
+    button.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  const note = document.getElementById("preset-note");
+  if (state.activePreset && PRESET_COPY[state.activePreset]) {
+    const count = (state.presetText[state.activePreset] || "").split("\n").filter(Boolean).length;
+    note.textContent = (count ? formatCount(count) + " TLDs. " : "") + PRESET_COPY[state.activePreset];
+  } else {
+    note.textContent = "Custom list. Pick a set above to replace it.";
+  }
+}
+
+function applyPreset(id) {
+  const text = state.presetText[id];
+  if (!text) {
+    state.pendingPreset = id;
+    return;
+  }
+  state.pendingPreset = "";
+  state.activePreset = id;
+  tldsEl.value = text;
+  sessionStorage.setItem(TLDS_KEY, text);
+  sessionStorage.setItem(PRESET_KEY, id);
+  paintPresets();
+  renderCoverage();
+}
+
+function syncPresetFromText() {
+  const current = tldsEl.value.trim();
+  let match = "";
+  Object.keys(state.presetText).forEach((id) => {
+    if ((state.presetText[id] || "").trim() === current) match = id;
+  });
+  state.activePreset = match;
+  if (match) sessionStorage.setItem(PRESET_KEY, match);
+  else sessionStorage.removeItem(PRESET_KEY);
+  paintPresets();
 }
 
 function scheduleDraft() {
@@ -349,6 +452,7 @@ function scheduleDraft() {
   draftTimer = setTimeout(() => {
     sessionStorage.setItem(NAMES_KEY, namesEl.value);
     sessionStorage.setItem(TLDS_KEY, tldsEl.value);
+    syncPresetFromText();
     renderCoverage();
   }, 150);
 }
@@ -358,8 +462,17 @@ async function loadDirectory() {
     const response = await fetch("/api/defaults");
     if (!response.ok) throw new Error("defaults");
     const data = await response.json();
-    state.defaultTldText = data.text || "";
-    if (!sessionStorage.getItem(TLDS_KEY)) tldsEl.value = state.defaultTldText;
+    const presets = data.presets || {};
+    ["all", "famous", "launch", "countries"].forEach((id) => {
+      const list = presets[id] || [];
+      state.presetText[id] = list.join("\n");
+      const count = document.querySelector('[data-count="' + id + '"]');
+      if (count && list.length) count.textContent = formatCount(list.length);
+    });
+    state.defaultTldText = state.presetText.all || data.text || "";
+    if (state.pendingPreset && state.presetText[state.pendingPreset]) applyPreset(state.pendingPreset);
+    else if (!sessionStorage.getItem(TLDS_KEY)) applyPreset(data.defaultPreset || "all");
+    else syncPresetFromText();
     if (data.bootstrapError) state.bootstrapError = data.bootstrapError;
     if (data.publication) state.publication = data.publication;
   } catch (error) {
@@ -382,6 +495,12 @@ async function loadDirectory() {
 }
 
 function metrics(name) {
+  if (metricStamp !== state.lookupsDone) {
+    metricMemo.clear();
+    metricStamp = state.lookupsDone;
+  }
+  const memo = metricMemo.get(name.ascii);
+  if (memo) return memo;
   const counts = { registered: 0, available: 0, unknown: 0, done: 0, rdapAvailable: 0, total: state.tlds.length };
   state.tlds.forEach((tld) => {
     const hit = state.results.get(cacheKey(name.ascii, tld.ascii));
@@ -393,6 +512,7 @@ function metrics(name) {
       if (hit.method === "rdap") counts.rdapAvailable += 1;
     } else counts.unknown += 1;
   });
+  metricMemo.set(name.ascii, counts);
   return counts;
 }
 
@@ -439,6 +559,19 @@ function mixBar(counts) {
   });
   bar.title = counts.registered + " registered, " + counts.available + " available, " + counts.unknown + " unknown";
   return bar;
+}
+
+function fillChips(wrap, hits, nameAscii) {
+  hits.slice(0, CHIP_CAP).forEach((hit) => wrap.append(chip(hit)));
+  if (hits.length <= CHIP_CAP) return;
+  const more = el("button", "more-chips", "+" + (hits.length - CHIP_CAP).toLocaleString() + " more");
+  more.type = "button";
+  more.addEventListener("click", () => {
+    if (state.expanded.has(nameAscii)) state.expanded.delete(nameAscii);
+    else state.expanded.add(nameAscii);
+    renderTable();
+  });
+  wrap.append(more);
 }
 
 function resultList(name, status) {
@@ -499,11 +632,11 @@ function renderTable() {
     tr.append(el("td", "num unk-ink", String(counts.unknown)));
     const takenCell = el("td");
     const takenWrap = el("div", "chips");
-    resultList(name, "registered").forEach((hit) => takenWrap.append(chip(hit)));
+    fillChips(takenWrap, resultList(name, "registered"), name.ascii);
     takenCell.append(takenWrap);
     const freeCell = el("td");
     const freeWrap = el("div", "chips");
-    resultList(name, "available").forEach((hit) => freeWrap.append(chip(hit)));
+    fillChips(freeWrap, resultList(name, "available"), name.ascii);
     freeCell.append(freeWrap);
     tr.append(takenCell, freeCell);
     tbody.append(tr);
@@ -511,6 +644,7 @@ function renderTable() {
     const detail = el("tr", "detail");
     const cell = el("td");
     cell.colSpan = 6;
+    const scroll = el("div", "detail-scroll");
     const inner = el("table", "detail-table");
     const head = el("tr");
     ["TLD", "Result", "Method", "Confidence", "What the lookup means"].forEach((label) => head.append(el("th", null, label)));
@@ -531,7 +665,8 @@ function renderTable() {
       }
       inner.append(row);
     });
-    cell.append(inner);
+    scroll.append(inner);
+    cell.append(scroll);
     detail.append(cell);
     tbody.append(detail);
   });
@@ -622,12 +757,13 @@ function scheduleRender() {
 
 function applyResult(result, fromCache) {
   const key = cacheKey(result.name, result.tld);
+  const isNew = !state.results.has(key);
   state.results.set(key, result);
   if (!fromCache) {
     cache[key] = result;
     scheduleCacheFlush();
   }
-  state.lookupsDone = countFinished();
+  if (isNew) state.lookupsDone += 1;
   const pending = state.names.find((name) => metrics(name).done < state.tlds.length);
   state.currentName = pending ? pending.display : "";
   scheduleRender();
@@ -714,14 +850,17 @@ async function runCheck(mode) {
   }
   document.getElementById("check").textContent = "Checking…";
   try {
-    const response = await fetch("/api/check", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-      body: JSON.stringify({ checks: needed, fresh: fresh }),
-      signal: state.controller.signal,
-    });
-    if (!response.ok || !response.body) throw new Error(await readError(response));
-    await readStream(response.body);
+    for (let index = 0; index < needed.length; index += CHECK_CHUNK) {
+      if (state.controller.signal.aborted) break;
+      const response = await fetch("/api/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+        body: JSON.stringify({ checks: needed.slice(index, index + CHECK_CHUNK), fresh: fresh }),
+        signal: state.controller.signal,
+      });
+      if (!response.ok || !response.body) throw new Error(await readError(response));
+      await readStream(response.body);
+    }
   } catch (error) {
     if (error.name !== "AbortError") showBanner(error.message || "The check stopped because a lookup request failed.", true);
   }
@@ -799,10 +938,8 @@ document.getElementById("example").addEventListener("click", () => {
   scheduleDraft();
   renderCoverage();
 });
-document.getElementById("reset-tlds").addEventListener("click", () => {
-  tldsEl.value = state.defaultTldText || "com\nnet\norg\nio\nco\nai\napp\ndev";
-  scheduleDraft();
-  renderCoverage();
+document.querySelectorAll(".preset").forEach((button) => {
+  button.addEventListener("click", () => applyPreset(button.dataset.preset));
 });
 document.getElementById("recheck").addEventListener("click", () => {
   Object.keys(cache).forEach((key) => {

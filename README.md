@@ -25,7 +25,14 @@ DNS is only a hint. A registered domain with no nameservers can look free (NXDOM
 5. If RDAP exists but the request fails, the result stays unknown. DNS is not used to paper over a registry outage.
 6. Finished answers are remembered in this browser tab, so a repeat check does not ask again. Unknowns are remembered too; use **Recheck unknowns** to try those again. **Clear tab cache** forgets everything stored in the tab.
 
-The default TLD list is a mix of common gTLDs and ccTLDs. Edit it or paste your own, up to 40 TLDs and 150 names per run.
+The TLD box starts with every extension in the IANA root (largest zones first). Four sets sit above it:
+
+- **All TLDs** — the full root list.
+- **Famous 400** — the 400 largest zones, ranked by how many domains they hold.
+- **Launch** — the short list worth buying for a new product.
+- **Countries** — the 80 largest country-code extensions.
+
+You can still edit or paste your own list. Up to 150 names per run.
 
 ## Setup
 

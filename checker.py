@@ -16,6 +16,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
+from pathlib import Path
 
 USER_AGENT = "BulkTLDChecker/1.0 (local; public RDAP and DNS only)"
 BOOTSTRAP_URL = "https://data.iana.org/rdap/dns.json"
@@ -33,38 +34,9 @@ _HOSTS_LOCK = threading.Lock()
 _HOST_LIMIT = 4
 
 MAX_NAMES = 150
-MAX_TLDS = 40
-
-DEFAULT_TLDS = [
-    "com",
-    "net",
-    "org",
-    "info",
-    "biz",
-    "io",
-    "co",
-    "ai",
-    "app",
-    "dev",
-    "me",
-    "tv",
-    "cc",
-    "xyz",
-    "online",
-    "site",
-    "tech",
-    "store",
-    "shop",
-    "cloud",
-    "us",
-    "uk",
-    "ca",
-    "de",
-    "au",
-    "fr",
-    "nl",
-    "eu",
-]
+MAX_TLDS = 5000
+PRESETS_PATH = Path(__file__).with_name("tld_presets.json")
+_PRESETS: dict | None = None
 
 # Multi-label suffixes we strip when someone pastes a full domain.
 # Longest match wins. This is a practical subset, not the full Public Suffix List.
@@ -143,8 +115,15 @@ class ParseOutcome:
     error: str | None = None
 
 
+def load_presets() -> dict:
+    global _PRESETS
+    if _PRESETS is None:
+        _PRESETS = json.loads(PRESETS_PATH.read_text(encoding="utf-8"))
+    return _PRESETS
+
+
 def default_tld_text() -> str:
-    return "\n".join(DEFAULT_TLDS)
+    return "\n".join(load_presets()["all"])
 
 
 class _HostSlot:

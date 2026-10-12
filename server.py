@@ -39,11 +39,16 @@ class Handler(BaseHTTPRequestHandler):
             self._serve_index()
         elif path == "/api/defaults":
             boot = _bootstrap_if_ready()
+            presets = checker.load_presets()
             payload = {
-                "tlds": [
-                    {"ascii": tld, "display": tld} for tld in checker.DEFAULT_TLDS
-                ],
-                "text": checker.default_tld_text(),
+                "text": "\n".join(presets["all"]),
+                "defaultPreset": "all",
+                "presets": {
+                    "all": presets["all"],
+                    "famous": presets["famous"],
+                    "launch": presets["launch"],
+                    "countries": presets["countries"],
+                },
                 "maxNames": checker.MAX_NAMES,
                 "maxTlds": checker.MAX_TLDS,
             }
