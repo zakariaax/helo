@@ -37,7 +37,7 @@ _HOST_LIMIT = 4
 _DOH_LIMIT = 10
 _DOH_HOSTS = frozenset({"cloudflare-dns.com", "dns.google"})
 
-MAX_NAMES = 150
+MAX_NAMES = 20000
 MAX_TLDS = 5000
 PRESETS_PATH = Path(__file__).with_name("tld_presets.json")
 _PRESETS: dict | None = None

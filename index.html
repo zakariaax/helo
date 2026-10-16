@@ -90,9 +90,15 @@
   .ghost:hover, .danger:hover { background: #fff; }
   .danger { background: transparent; border-color: #e7c2b8; color: var(--red); }
   .progress-card { padding: 14px 16px; margin-bottom: 12px; }
-  .progress-top { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; }
+  .progress-top { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: baseline; }
   .progress-top strong { font-size: 18px; }
-  #progress-eta { font-weight: 700; text-align: right; }
+  #progress-eta, #progress-elapsed { font-weight: 700; font-variant-numeric: tabular-nums; }
+  #progress-elapsed { text-align: center; }
+  #progress-eta { text-align: right; }
+  @media (max-width: 720px) {
+    .progress-top { grid-template-columns: 1fr; gap: 4px; }
+    #progress-elapsed, #progress-eta { text-align: left; }
+  }
   .progress-sub { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
   .bar { height: 8px; background: #ebe4da; border-radius: 99px; overflow: hidden; margin-top: 10px; }
   .bar span { display: block; height: 100%; width: 0; background: var(--accent); border-radius: inherit; }
@@ -157,6 +163,8 @@
   .status-panel { max-height: 280px; overflow: auto; }
   .status-panel .chips { max-width: none; }
   .legend { color: var(--muted); font-size: 13px; margin: 8px 2px 0; }
+  .pager { display: flex; gap: 10px; align-items: center; padding: 12px; }
+  .banner .ghost, .banner .primary { margin-left: 8px; }
   .footer-note { color: var(--muted); font-size: 13px; margin-top: 18px; }
   code { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 0.92em; }
   @media (max-width: 980px) {
@@ -233,7 +241,7 @@
     <label class="field">
       <div class="label-row"><strong>Names</strong><span id="name-count">0 names</span></div>
       <textarea id="names" spellcheck="false" autocomplete="off" placeholder="One name per line"></textarea>
-      <div class="hint">Second-level labels, like <code>brandname</code>. Full domains (<code>brand.com</code>), URLs, uppercase, and extra spaces are normalized. International names are checked in punycode. Up to 150 names per run. The TLD box already holds every root extension.</div>
+      <div class="hint">Second-level labels, like <code>brandname</code>. Full domains (<code>brand.com</code>), URLs, uppercase, and extra spaces are normalized. International names are checked in punycode. Up to 20,000 names per run. About 100 names across every extension stays inside an hour. For thousands of names, use Launch or Countries. A list that would run for many hours asks you to keep the largest extensions first.</div>
     </label>
     <label class="field">
       <div class="label-row"><strong>TLDs</strong><span id="tld-count">0 TLDs</span></div>
@@ -254,6 +262,7 @@
   <section class="card progress-card" id="progress-card" hidden>
     <div class="progress-top">
       <strong id="progress-label">Waiting</strong>
+      <span id="progress-elapsed"></span>
       <span id="progress-eta"></span>
     </div>
     <div class="bar" aria-hidden="true"><span id="progress-bar"></span></div>
@@ -289,6 +298,7 @@
       </thead>
       <tbody id="tbody"></tbody>
     </table>
+    <div class="pager" id="pager" hidden></div>
   </section>
   <p class="legend" id="legend" hidden>Red is taken, green looks available, amber is unknown. Click a count to list those extensions. A failed lookup stays unknown and is never called available. RDAP availability is high confidence. DNS availability is a hint.</p>
   <p class="footer-note" id="footer-note">Nothing is uploaded to an account. A check asks IANA for the RDAP server list, then the registry for each RDAP TLD. If the registry cannot be reached, it asks Cloudflare or Google DNS-over-HTTPS and labels that as a DNS hint. Answers stay in this browser tab until you close it. Names are checked together, with a cap per registry so one slow server does not stall the rest.</p>
@@ -342,6 +352,9 @@ const state = {
   runTotal: 0,
   etaMs: null,
   etaRough: true,
+  page: 0,
+  elapsedMs: 0,
+  segmentStart: 0,
 };
 
 let cache = loadCache();
@@ -424,8 +437,10 @@ function renderCoverage() {
   const dns = [];
   tlds.forEach((tld) => (tldHasRdap(tld) ? rdap : dns).push(tld));
   const published = state.publication ? " IANA RDAP list published " + state.publication.slice(0, 10) + "." : "";
+  const lookups = names.length * tlds.length;
+  const pace = lookups ? " About " + formatDuration((lookups / 150) * 1000) + " for this list." : "";
   if (tlds.length > 18) {
-    hint.textContent = rdap.length + " use RDAP. " + dns.length + " use a DNS hint." + published;
+    hint.textContent = rdap.length + " extensions ask the registry when it answers quickly. Slow registries use a DNS hint." + published + pace;
     return;
   }
   hint.textContent = "RDAP for " + (rdap.join(", ") || "none") + ". DNS hint only for " + (dns.join(", ") || "none") + "." + published;
@@ -561,12 +576,8 @@ async function loadDirectory() {
 }
 
 function metrics(name) {
-  if (metricStamp !== state.lookupsDone) {
-    metricMemo.clear();
-    metricStamp = state.lookupsDone;
-  }
   const memo = metricMemo.get(name.ascii);
-  if (memo) return memo;
+  if (memo && memo.total === state.tlds.length) return memo;
   const counts = { registered: 0, available: 0, unknown: 0, done: 0, rdapAvailable: 0, total: state.tlds.length };
   state.tlds.forEach((tld) => {
     const hit = state.results.get(cacheKey(name.ascii, tld.ascii));
@@ -580,6 +591,22 @@ function metrics(name) {
   });
   metricMemo.set(name.ascii, counts);
   return counts;
+}
+
+function bumpMetric(ascii, hit) {
+  const counts = metricMemo.get(ascii);
+  if (!counts || counts.total !== state.tlds.length) return;
+  counts.done += 1;
+  if (hit.status === "registered") counts.registered += 1;
+  else if (hit.status === "available") {
+    counts.available += 1;
+    if (hit.method === "rdap") counts.rdapAvailable += 1;
+  } else counts.unknown += 1;
+}
+
+function recomputeMetrics() {
+  metricMemo.clear();
+  state.names.forEach((name) => metrics(name));
 }
 
 function visibleNames() {
@@ -709,6 +736,8 @@ function renderTable() {
   const tbody = document.getElementById("tbody");
   tbody.replaceChildren();
   const rows = visibleNames();
+  renderPager(rows.length);
+  const pageRows = rows.slice(state.page * PAGE_SIZE, (state.page + 1) * PAGE_SIZE);
   if (!rows.length) {
     const tr = el("tr");
     const td = el("td", null, "No names match this filter.");
@@ -717,7 +746,7 @@ function renderTable() {
     tbody.append(tr);
     return;
   }
-  rows.forEach((name) => {
+  pageRows.forEach((name) => {
     const counts = metrics(name);
     const tr = el("tr");
     const nameCell = el("td");
@@ -783,6 +812,13 @@ function renderTable() {
   });
 }
 
+function formatElapsed(ms) {
+  const sec = Math.max(0, Math.round(ms / 1000));
+  if (sec < 1) return "less than a second";
+  if (sec < 90) return sec === 1 ? "1 second" : sec + " seconds";
+  return formatDuration(ms);
+}
+
 function formatDuration(ms) {
   const sec = Math.max(1, Math.round(ms / 1000));
   if (sec < 90) return sec === 1 ? "1 second" : sec + " seconds";
@@ -796,6 +832,88 @@ function formatDuration(ms) {
   return hours + " " + minutes;
 }
 
+const HOUR_LOOKUPS = 780000;
+const PAGE_SIZE = 40;
+let clockTimer = 0;
+
+function elapsedNow() {
+  return state.elapsedMs + (state.segmentStart ? performance.now() - state.segmentStart : 0);
+}
+
+function paintElapsed() {
+  const node = document.getElementById("progress-elapsed");
+  if (!node) return;
+  if (!state.started) {
+    node.textContent = "";
+    return;
+  }
+  const text = formatElapsed(elapsedNow());
+  node.textContent = !state.running && state.lookupsDone >= state.lookupsTotal && state.lookupsTotal ? "Took " + text : "Elapsed " + text;
+}
+
+function beginSegment() {
+  if (!state.segmentStart) state.segmentStart = performance.now();
+  clearInterval(clockTimer);
+  clockTimer = setInterval(paintElapsed, 1000);
+  paintElapsed();
+}
+
+function endSegment() {
+  if (state.segmentStart) {
+    state.elapsedMs += performance.now() - state.segmentStart;
+    state.segmentStart = 0;
+  }
+  clearInterval(clockTimer);
+  paintElapsed();
+}
+
+function renderPager(total) {
+  const pager = document.getElementById("pager");
+  const pages = Math.ceil(total / PAGE_SIZE);
+  if (!pager) return;
+  if (pages <= 1) {
+    pager.hidden = true;
+    pager.replaceChildren();
+    return;
+  }
+  if (state.page >= pages) state.page = pages - 1;
+  if (state.page < 0) state.page = 0;
+  pager.hidden = false;
+  pager.replaceChildren();
+  const prev = el("button", "ghost", "Previous");
+  prev.type = "button";
+  prev.disabled = state.page === 0;
+  prev.addEventListener("click", () => { state.page -= 1; renderTable(); });
+  const next = el("button", "ghost", "Next");
+  next.type = "button";
+  next.disabled = state.page >= pages - 1;
+  next.addEventListener("click", () => { state.page += 1; renderTable(); });
+  const label = el("span", null, (state.page + 1) + " / " + pages);
+  pager.append(prev, label, next);
+}
+
+function trimTlds(keep) {
+  const tokens = tldsEl.value.split(/[\s,;]+/).map((item) => item.trim()).filter(Boolean);
+  tldsEl.value = tokens.slice(0, keep).join("\n");
+  sessionStorage.setItem(TLDS_KEY, tldsEl.value);
+  syncPresetFromText();
+  renderCoverage();
+}
+
+function showFitBanner(names, tlds, lookups, keep) {
+  bannerEl.replaceChildren();
+  const box = el("div", "banner");
+  box.append(names.toLocaleString() + " names × " + tlds.toLocaleString() + " extensions is " + lookups.toLocaleString() + " lookups. That is many hours. ");
+  const button = el("button", "primary", "Keep the first " + keep.toLocaleString() + " extensions");
+  button.type = "button";
+  button.addEventListener("click", () => {
+    trimTlds(keep);
+    showBanner("The list now has the " + keep.toLocaleString() + " largest extensions, sized for about an hour. Click Check.", false);
+  });
+  box.append(button);
+  bannerEl.append(box);
+}
+
 function etaPhrase() {
   if (!state.runTotal || state.etaMs == null) return "Estimating time left…";
   const lead = state.etaRough ? "Roughly " : "About ";
@@ -803,8 +921,7 @@ function etaPhrase() {
 }
 
 function seedEta(count) {
-  const parallel = Math.min(16, Math.max(1, count));
-  return (count / parallel) * 400;
+  return (count / 150) * 1000;
 }
 
 let etaSamples = [];
@@ -824,6 +941,7 @@ function renderProgress() {
   const pct = state.lookupsTotal ? Math.round((state.lookupsDone / state.lookupsTotal) * 100) : 0;
   document.getElementById("progress-bar").style.width = pct + "%";
   label.textContent = namesDone + " / " + totalNames + " names";
+  paintElapsed();
   if (!state.running && state.lookupsDone >= state.lookupsTotal) {
     etaEl.textContent = "";
     detail.textContent = state.lookupsTotal ? "Finished " + state.lookupsDone.toLocaleString() + " lookups" : "Nothing to look up";
@@ -930,7 +1048,10 @@ function applyResult(result, fromCache) {
     state.runDone += 1;
     updateEta();
   }
-  if (isNew) state.lookupsDone += 1;
+  if (isNew) {
+    state.lookupsDone += 1;
+    bumpMetric(result.name, result);
+  }
   const pending = state.names.find((name) => metrics(name).done < state.tlds.length);
   state.currentName = pending ? pending.display : "";
   scheduleRender();
@@ -996,11 +1117,28 @@ async function runCheck(mode) {
   }
   state.names = parsed.names || [];
   state.tlds = parsed.tlds || [];
+  const planned = state.names.length * state.tlds.length;
+  if (planned > HOUR_LOOKUPS) {
+    const keep = Math.max(12, Math.floor(HOUR_LOOKUPS / Math.max(state.names.length, 1)));
+    showFitBanner(state.names.length, state.tlds.length, planned, Math.min(keep, state.tlds.length));
+    state.controller = null;
+    document.getElementById("check").disabled = false;
+    document.getElementById("check").textContent = "Check";
+    document.getElementById("stop").hidden = true;
+    syncContinue();
+    return;
+  }
   state.bootstrapError = parsed.bootstrapError || null;
   if (parsed.bootstrapError) showBanner(parsed.bootstrapError + " Every TLD will use a DNS hint.", false);
   state.started = true;
+  state.page = 0;
   state.results = new Map();
   state.focus = null;
+  if (mode !== "continue") {
+    endSegment();
+    state.elapsedMs = 0;
+    state.segmentStart = 0;
+  }
   state.lookupsTotal = state.names.length * state.tlds.length;
   state.lookupsDone = 0;
   const lanes = state.names.map((name) => {
@@ -1014,6 +1152,7 @@ async function runCheck(mode) {
     return pairs;
   });
   const needed = window.TldBrowser ? TldBrowser.interleave(lanes) : lanes.flat();
+  recomputeMetrics();
   state.lookupsDone = state.results.size;
   etaSamples = [];
   state.runStartedAt = performance.now();
@@ -1030,6 +1169,7 @@ async function runCheck(mode) {
     return;
   }
   document.getElementById("check").textContent = "Checking…";
+  beginSegment();
   try {
     if (state.hosted && window.TldBrowser) {
       await TldBrowser.checkAll(needed, {
@@ -1090,6 +1230,7 @@ function syncContinue() {
 }
 
 function finishRun(keepResults) {
+  endSegment();
   state.running = false;
   state.controller = null;
   document.getElementById("check").disabled = false;
@@ -1125,7 +1266,7 @@ function csvEscape(value) {
 }
 
 document.getElementById("check").addEventListener("click", () => runCheck("cached"));
-document.getElementById("continue").addEventListener("click", () => runCheck("cached"));
+document.getElementById("continue").addEventListener("click", () => runCheck("continue"));
 document.getElementById("stop").addEventListener("click", () => {
   if (state.controller) state.controller.abort();
 });
@@ -1150,8 +1291,8 @@ document.getElementById("clear-cache").addEventListener("click", () => {
   showBanner("Cleared results remembered in this tab.", false);
 });
 document.getElementById("export").addEventListener("click", exportCsv);
-document.getElementById("search").addEventListener("input", scheduleRender);
-document.getElementById("filter").addEventListener("change", scheduleRender);
+document.getElementById("search").addEventListener("input", () => { state.page = 0; scheduleRender(); });
+document.getElementById("filter").addEventListener("change", () => { state.page = 0; scheduleRender(); });
 document.querySelectorAll("thead button").forEach((button) => {
   button.addEventListener("click", () => {
     const key = button.dataset.sort;

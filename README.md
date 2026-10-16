@@ -33,7 +33,7 @@ The TLD box starts with every extension in the IANA root (largest zones first). 
 - **Launch** — the short list worth buying for a new product.
 - **Countries** — the 80 largest country-code extensions.
 
-You can still edit or paste your own list. Up to 150 names per run.
+You can still edit or paste your own list. Up to 20,000 names per run. About 100 names across every extension is meant to finish inside an hour. For thousands of names, use Launch or Countries. A list that would take many hours offers to keep the largest extensions so the run stays about an hour. The progress card shows elapsed time next to the time left. Registries that answer quickly are checked with RDAP. A registry that fails twice in the same tab is checked with DNS for the rest of that tab.
 
 ## Setup
 
