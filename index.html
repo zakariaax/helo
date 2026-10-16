@@ -345,6 +345,8 @@ const state = {
 };
 
 let cache = loadCache();
+let cacheWrites = true;
+let cacheCount = Object.keys(cache).length;
 let renderQueued = false;
 let cacheTimer = 0;
 let draftTimer = 0;
@@ -361,10 +363,16 @@ function loadCache() {
 }
 
 function scheduleCacheFlush() {
+  if (!cacheWrites || cacheCount > 20000) return;
   clearTimeout(cacheTimer);
   cacheTimer = setTimeout(() => {
-    sessionStorage.setItem(CACHE_KEY, JSON.stringify(cache));
-  }, 200);
+    if (!cacheWrites || cacheCount > 20000) return;
+    try {
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+    } catch (error) {
+      cacheWrites = false;
+    }
+  }, 2500);
 }
 
 function cacheKey(ascii, tld) {
@@ -795,18 +803,11 @@ function etaPhrase() {
 }
 
 function seedEta(count) {
-  const parallel = Math.min(28, Math.max(1, count));
-  return (count / parallel) * 1600;
+  const parallel = Math.min(16, Math.max(1, count));
+  return (count / parallel) * 400;
 }
 
-function movingNames() {
-  let moving = 0;
-  state.names.forEach((name) => {
-    const counts = metrics(name);
-    if (counts.done > 0 && counts.done < counts.total) moving += 1;
-  });
-  return moving;
-}
+let etaSamples = [];
 
 function renderProgress() {
   const card = document.getElementById("progress-card");
@@ -828,9 +829,7 @@ function renderProgress() {
     detail.textContent = state.lookupsTotal ? "Finished " + state.lookupsDone.toLocaleString() + " lookups" : "Nothing to look up";
   } else if (state.running) {
     etaEl.textContent = etaPhrase();
-    const moving = movingNames() || Math.min(28, totalNames);
-    const noun = moving === 1 ? " name at once · " : " names at once · ";
-    detail.textContent = moving + noun + state.lookupsDone.toLocaleString() + " / " + state.lookupsTotal.toLocaleString() + " lookups";
+    detail.textContent = "Scanning · " + state.lookupsDone.toLocaleString() + " / " + state.lookupsTotal.toLocaleString() + " lookups";
   } else {
     const left = Math.max(0, state.lookupsTotal - state.lookupsDone);
     etaEl.textContent = left ? left.toLocaleString() + " lookups left" : "";
@@ -903,12 +902,20 @@ function scheduleRender() {
 }
 
 function updateEta() {
-  const elapsed = performance.now() - state.runStartedAt;
-  if (state.runDone < 8 || elapsed < 500) return;
-  const rate = state.runDone / elapsed;
+  const now = performance.now();
+  etaSamples.push({ t: now, n: state.runDone });
+  const cutoff = now - 15000;
+  while (etaSamples.length > 1 && etaSamples[0].t < cutoff) etaSamples.shift();
+  const elapsed = now - state.runStartedAt;
+  if (state.runDone < 8 || elapsed < 800) return;
+  const first = etaSamples[0];
+  const last = etaSamples[etaSamples.length - 1];
+  const span = last.t - first.t;
+  const gained = last.n - first.n;
+  const rate = span >= 1000 && gained >= 3 ? gained / span : state.runDone / elapsed;
   const remaining = Math.max(0, state.runTotal - state.runDone);
   const next = remaining / Math.max(rate, 0.000001);
-  state.etaMs = state.etaRough || state.etaMs == null ? next : state.etaMs * 0.65 + next * 0.35;
+  state.etaMs = state.etaRough || state.etaMs == null ? next : state.etaMs * 0.8 + next * 0.2;
   state.etaRough = false;
 }
 
@@ -917,6 +924,7 @@ function applyResult(result, fromCache) {
   const isNew = !state.results.has(key);
   state.results.set(key, result);
   if (!fromCache) {
+    if (!cache[key]) cacheCount += 1;
     cache[key] = result;
     scheduleCacheFlush();
     state.runDone += 1;
@@ -1007,6 +1015,7 @@ async function runCheck(mode) {
   });
   const needed = window.TldBrowser ? TldBrowser.interleave(lanes) : lanes.flat();
   state.lookupsDone = state.results.size;
+  etaSamples = [];
   state.runStartedAt = performance.now();
   state.runDone = 0;
   state.runTotal = needed.length;

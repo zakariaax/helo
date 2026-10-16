@@ -14,10 +14,19 @@
     "co.th", "com.pl", "co.il", "com.pt", "com.es",
   ].sort(function (a, b) { return b.split(".").length - a.split(".").length; });
   const POSITIVE = { 1: 1, 2: 1, 5: 1, 15: 1, 16: 1, 28: 1, 33: 1, 43: 1, 65: 1 };
-  const GLOBAL_LIMIT = 28;
+  const GLOBAL_LIMIT = 32;
+  const RDAP_TIMEOUT = 2200;
   const globalLimit = makeLimiter(GLOBAL_LIMIT);
   const hostLimits = {};
-  const DOH_HOST_LIMIT = { "cloudflare-dns.com": 10, "dns.google": 10 };
+  const DOH_HOST_LIMIT = { "cloudflare-dns.com": 16, "dns.google": 16 };
+  const rdapFailures = {};
+  let rdapSkip = {};
+  try {
+    const savedSkip = JSON.parse(sessionStorage.getItem("tld-checker-rdap-skip-v1") || "{}");
+    if (savedSkip && typeof savedSkip === "object") rdapSkip = savedSkip;
+  } catch (error) {
+    rdapSkip = {};
+  }
   let suffixes = null;
   let publication = null;
   let bootstrapError = null;
@@ -342,7 +351,8 @@
           return { status: response.status, body: body, error: null };
         } catch (error) {
           if (userStop || stopped(signal)) return { status: null, body: "", error: "AbortError" };
-          lastError = error && error.name ? error.name : "error";
+          const name = error && error.name ? error.name : "error";
+          lastError = name === "AbortError" ? "TimeoutError" : name;
           if (attempt < retries) {
             await sleep(delay, signal);
             delay *= 2;
@@ -385,6 +395,34 @@
     return null;
   }
 
+  function rdapHost(base) {
+    try { return new URL(base).host; } catch (error) { return ""; }
+  }
+
+  function saveRdapSkip() {
+    try { sessionStorage.setItem("tld-checker-rdap-skip-v1", JSON.stringify(rdapSkip)); } catch (error) { /* the skip list is also kept in memory */ }
+  }
+
+  function markRdapDown(base) {
+    const host = rdapHost(base);
+    if (!host || rdapSkip[host]) return;
+    rdapFailures[host] = (rdapFailures[host] || 0) + 1;
+    if (rdapFailures[host] >= 2) {
+      rdapSkip[host] = 1;
+      saveRdapSkip();
+    }
+  }
+
+  function markRdapUp(base) {
+    const host = rdapHost(base);
+    if (!host) return;
+    rdapFailures[host] = 0;
+    if (rdapSkip[host]) {
+      delete rdapSkip[host];
+      saveRdapSkip();
+    }
+  }
+
   function urlsFor(fqdn) {
     const labels = fqdn.toLowerCase().split(".").filter(Boolean);
     for (let index = 0; index < labels.length; index += 1) {
@@ -405,16 +443,20 @@
     for (let index = 0; index < Math.min(bases.length, 2); index += 1) {
       if (stopped(signal)) return null;
       const base = bases[index].replace(/\/$/, "");
-      let hit = await httpGet(base + path, "application/rdap+json, application/json", 4000, 0, signal);
+      let hit = await httpGet(base + path, "application/rdap+json, application/json", RDAP_TIMEOUT, 0, signal);
       if (hit.error === "AbortError" || stopped(signal)) return null;
       if (hit.status === 429) {
         await sleep(250, signal);
         if (stopped(signal)) return null;
-        hit = await httpGet(base + path, "application/rdap+json, application/json", 4000, 0, signal);
+        hit = await httpGet(base + path, "application/rdap+json, application/json", RDAP_TIMEOUT, 0, signal);
         if (hit.error === "AbortError" || stopped(signal)) return null;
       }
       const classified = classifyRdap(hit.status, hit.body);
-      if (classified) return classified;
+      if (classified) {
+        markRdapUp(base);
+        return classified;
+      }
+      if (!hit.status) markRdapDown(base);
       if (hit.status === 429) last.detail = "The RDAP server rate-limited this lookup. Marked unknown, not available.";
       else if (hit.status) last.detail = "The RDAP server returned HTTP " + hit.status + ". Marked unknown, not available.";
       else last.detail = "The RDAP server did not respond (" + (hit.error || "error") + "). Marked unknown, not available.";
@@ -480,7 +522,7 @@
     if (stopped(signal)) return null;
     let addresses = [];
     if (!nsPayload || (Number(nsPayload.Status) === 0 && !hasAnswers(nsPayload))) {
-      addresses = [await queryDoh(fqdn, "A", signal), await queryDoh(fqdn, "AAAA", signal)];
+      addresses = await Promise.all([queryDoh(fqdn, "A", signal), queryDoh(fqdn, "AAAA", signal)]);
       if (stopped(signal)) return null;
     }
     return classifyDns(nsPayload, addresses);
@@ -495,11 +537,16 @@
       if (!outcome || stopped(signal)) return null;
       outcome.detail = "No RDAP directory was available, so this used DNS only. " + outcome.detail;
     } else {
-      const bases = urlsFor(fqdn);
-      if (!bases.length) {
+      const listed = urlsFor(fqdn);
+      const bases = listed.filter(function (base) { return !rdapSkip[rdapHost(base)]; });
+      if (!listed.length) {
         outcome = await checkDns(fqdn, signal);
         if (!outcome || stopped(signal)) return null;
         outcome.detail = "No public RDAP server is listed for ." + item.tld + ". " + outcome.detail;
+      } else if (!bases.length) {
+        outcome = await checkDns(fqdn, signal);
+        if (!outcome || stopped(signal)) return null;
+        outcome.detail = "This registry stopped answering, so this is a DNS hint. " + outcome.detail;
       } else {
         outcome = await checkRdap(fqdn, bases, signal);
         if (!outcome || stopped(signal)) return null;
@@ -587,7 +634,8 @@
         cursor += 1;
         try {
           const result = await checkOne(item, signal);
-          if (!result || stopped(signal)) return;
+          if (stopped(signal)) return;
+          if (!result) continue;
           if (options.onResult) options.onResult(result);
         } catch (error) {
           if (stopped(signal)) return;
