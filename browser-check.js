@@ -1,6 +1,6 @@
 /* Browser engine for the public site. Registries are queried directly from the page. */
 (function () {
-  const MAX_NAMES = 150;
+  const MAX_NAMES = 20000;
   const MAX_TLDS = 5000;
   const MULTI_SUFFIXES = [
     "co.uk", "org.uk", "me.uk", "ac.uk", "gov.uk",
@@ -14,11 +14,17 @@
     "co.th", "com.pl", "co.il", "com.pt", "com.es",
   ].sort(function (a, b) { return b.split(".").length - a.split(".").length; });
   const POSITIVE = { 1: 1, 2: 1, 5: 1, 15: 1, 16: 1, 28: 1, 33: 1, 43: 1, 65: 1 };
-  const GLOBAL_LIMIT = 32;
-  const RDAP_TIMEOUT = 2200;
+  const GLOBAL_LIMIT = 96;
+  const RDAP_TIMEOUT = 1000;
   const globalLimit = makeLimiter(GLOBAL_LIMIT);
   const hostLimits = {};
-  const DOH_HOST_LIMIT = { "cloudflare-dns.com": 16, "dns.google": 16 };
+  const DOH_HOST_LIMIT = { "cloudflare-dns.com": 32, "dns.google": 32, "doh.dns.sb": 32 };
+  const DOH_BASES = [
+    "https://cloudflare-dns.com/dns-query",
+    "https://dns.google/resolve",
+    "https://doh.dns.sb/dns-query",
+  ];
+  let dohCursor = 0;
   const rdapFailures = {};
   let rdapSkip = {};
   try {
@@ -70,7 +76,7 @@
   }
 
   function hostLimiter(host) {
-    const max = DOH_HOST_LIMIT[host] || 4;
+    const max = DOH_HOST_LIMIT[host] || 8;
     if (!hostLimits[host]) hostLimits[host] = makeLimiter(max);
     return hostLimits[host];
   }
@@ -432,7 +438,7 @@
     return [];
   }
 
-  async function checkRdap(fqdn, bases, signal) {
+  async function checkRdap(fqdn, bases, signal, timeout) {
     let last = {
       status: "unknown",
       method: "rdap",
@@ -440,23 +446,17 @@
       detail: "The RDAP lookup failed. Marked unknown, not available.",
     };
     const path = "/domain/" + encodeURIComponent(fqdn).replace(/%2E/gi, ".");
-    for (let index = 0; index < Math.min(bases.length, 2); index += 1) {
+    for (let index = 0; index < Math.min(bases.length, 1); index += 1) {
       if (stopped(signal)) return null;
       const base = bases[index].replace(/\/$/, "");
-      let hit = await httpGet(base + path, "application/rdap+json, application/json", RDAP_TIMEOUT, 0, signal);
+      const hit = await httpGet(base + path, "application/rdap+json, application/json", timeout || RDAP_TIMEOUT, 0, signal);
       if (hit.error === "AbortError" || stopped(signal)) return null;
-      if (hit.status === 429) {
-        await sleep(250, signal);
-        if (stopped(signal)) return null;
-        hit = await httpGet(base + path, "application/rdap+json, application/json", RDAP_TIMEOUT, 0, signal);
-        if (hit.error === "AbortError" || stopped(signal)) return null;
-      }
       const classified = classifyRdap(hit.status, hit.body);
       if (classified) {
         markRdapUp(base);
         return classified;
       }
-      if (!hit.status) markRdapDown(base);
+      if (!hit.status || hit.status === 429) markRdapDown(base);
       if (hit.status === 429) last.detail = "The RDAP server rate-limited this lookup. Marked unknown, not available.";
       else if (hit.status) last.detail = "The RDAP server returned HTTP " + hit.status + ". Marked unknown, not available.";
       else last.detail = "The RDAP server did not respond (" + (hit.error || "error") + "). Marked unknown, not available.";
@@ -471,13 +471,12 @@
 
   async function queryDoh(fqdn, type, signal) {
     const name = encodeURIComponent(fqdn);
-    const urls = [
-      "https://cloudflare-dns.com/dns-query?name=" + name + "&type=" + type,
-      "https://dns.google/resolve?name=" + name + "&type=" + type,
-    ];
-    for (let index = 0; index < urls.length; index += 1) {
+    const start = dohCursor;
+    dohCursor = (dohCursor + 1) % DOH_BASES.length;
+    for (let step = 0; step < 2; step += 1) {
       if (stopped(signal)) return null;
-      const hit = await httpGet(urls[index], "application/dns-json", 3500, 0, signal);
+      const base = DOH_BASES[(start + step) % DOH_BASES.length];
+      const hit = await httpGet(base + "?name=" + name + "&type=" + type, "application/dns-json", 1400, 0, signal);
       if (hit.error === "AbortError" || stopped(signal)) return null;
       if (hit.status === 200 && hit.body) {
         try {
@@ -522,8 +521,9 @@
     if (stopped(signal)) return null;
     let addresses = [];
     if (!nsPayload || (Number(nsPayload.Status) === 0 && !hasAnswers(nsPayload))) {
-      addresses = await Promise.all([queryDoh(fqdn, "A", signal), queryDoh(fqdn, "AAAA", signal)]);
+      const address = await queryDoh(fqdn, "A", signal);
       if (stopped(signal)) return null;
+      addresses = address ? [address] : [];
     }
     return classifyDns(nsPayload, addresses);
   }
@@ -538,7 +538,7 @@
       outcome.detail = "No RDAP directory was available, so this used DNS only. " + outcome.detail;
     } else {
       const listed = urlsFor(fqdn);
-      const bases = listed.filter(function (base) { return !rdapSkip[rdapHost(base)]; });
+      const bases = listed.filter(function (base) { return !rdapSkip[rdapHost(base)]; }).slice(0, 1);
       if (!listed.length) {
         outcome = await checkDns(fqdn, signal);
         if (!outcome || stopped(signal)) return null;
@@ -548,7 +548,7 @@
         if (!outcome || stopped(signal)) return null;
         outcome.detail = "This registry stopped answering, so this is a DNS hint. " + outcome.detail;
       } else {
-        outcome = await checkRdap(fqdn, bases, signal);
+        outcome = await checkRdap(fqdn, bases, signal, RDAP_TIMEOUT);
         if (!outcome || stopped(signal)) return null;
         if (outcome.status === "unknown") {
           const dns = await checkDns(fqdn, signal);
