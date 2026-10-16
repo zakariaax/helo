@@ -244,6 +244,7 @@
 
   <div class="actions">
     <button class="primary" id="check" type="button">Check</button>
+    <button class="primary" id="continue" type="button" hidden>Continue scanning</button>
     <button class="danger" id="stop" type="button" hidden>Stop</button>
     <button class="ghost" id="example" type="button">Load example</button>
     <button class="ghost" id="recheck" type="button" hidden>Recheck unknowns</button>
@@ -831,9 +832,11 @@ function renderProgress() {
     const noun = moving === 1 ? " name at once · " : " names at once · ";
     detail.textContent = moving + noun + state.lookupsDone.toLocaleString() + " / " + state.lookupsTotal.toLocaleString() + " lookups";
   } else {
-    etaEl.textContent = "";
+    const left = Math.max(0, state.lookupsTotal - state.lookupsDone);
+    etaEl.textContent = left ? left.toLocaleString() + " lookups left" : "";
     detail.textContent = "Stopped at " + state.lookupsDone.toLocaleString() + " / " + state.lookupsTotal.toLocaleString() + " lookups";
   }
+  syncContinue();
   document.title = state.running && state.runTotal ? etaPhrase() + " · Bulk TLD checker" : "Bulk TLD checker";
 }
 
@@ -950,6 +953,7 @@ async function runCheck(mode) {
   showBanner("");
   state.controller = new AbortController();
   document.getElementById("check").disabled = true;
+  document.getElementById("continue").hidden = true;
   document.getElementById("stop").hidden = false;
   document.getElementById("check").textContent = "Preparing…";
   let parsed;
@@ -1070,12 +1074,19 @@ async function readStream(stream) {
   sessionStorage.setItem(CACHE_KEY, JSON.stringify(cache));
 }
 
+function syncContinue() {
+  const button = document.getElementById("continue");
+  const paused = state.started && !state.running && state.lookupsDone < state.lookupsTotal;
+  button.hidden = !paused;
+}
+
 function finishRun(keepResults) {
   state.running = false;
   state.controller = null;
   document.getElementById("check").disabled = false;
   document.getElementById("check").textContent = "Check";
   document.getElementById("stop").hidden = true;
+  syncContinue();
   if (keepResults) scheduleRender();
 }
 
@@ -1105,6 +1116,7 @@ function csvEscape(value) {
 }
 
 document.getElementById("check").addEventListener("click", () => runCheck("cached"));
+document.getElementById("continue").addEventListener("click", () => runCheck("cached"));
 document.getElementById("stop").addEventListener("click", () => {
   if (state.controller) state.controller.abort();
 });
