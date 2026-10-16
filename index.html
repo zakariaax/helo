@@ -92,6 +92,8 @@
   .progress-card { padding: 14px 16px; margin-bottom: 12px; }
   .progress-top { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; }
   .progress-top strong { font-size: 18px; }
+  #progress-eta { font-weight: 700; text-align: right; }
+  .progress-sub { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
   .bar { height: 8px; background: #ebe4da; border-radius: 99px; overflow: hidden; margin-top: 10px; }
   .bar span { display: block; height: 100%; width: 0; background: var(--accent); border-radius: inherit; }
   .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
@@ -116,6 +118,13 @@
   th button { background: none; border: 0; padding: 0; font-weight: 700; color: var(--muted); }
   th button[aria-sort="descending"], th button[aria-sort="ascending"] { color: var(--ink); }
   td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; width: 1%; }
+  .count-btn {
+    background: none; border: 0; padding: 2px 6px; margin: -2px -6px; border-radius: 8px;
+    font: inherit; font-variant-numeric: tabular-nums; font-weight: 700; cursor: pointer;
+  }
+  .count-btn:hover:not(:disabled) { text-decoration: underline; }
+  .count-btn[aria-pressed="true"] { background: #f3eee6; }
+  .count-btn:disabled { cursor: default; }
   .name-btn { background: none; border: 0; padding: 0; font-weight: 700; text-align: left; }
   .name-btn:hover { text-decoration: underline; }
   .subascii { color: var(--muted); font-size: 12px; }
@@ -144,6 +153,9 @@
   .more-chips { border: 0; background: transparent; color: var(--muted); font-size: 12px; font-weight: 700; padding: 3px 2px; }
   .more-chips:hover { color: var(--ink); }
   .detail-scroll { max-height: 420px; overflow: auto; }
+  .status-note { margin: 0 0 8px; color: var(--muted); font-size: 13px; }
+  .status-panel { max-height: 280px; overflow: auto; }
+  .status-panel .chips { max-width: none; }
   .legend { color: var(--muted); font-size: 13px; margin: 8px 2px 0; }
   .footer-note { color: var(--muted); font-size: 13px; margin-top: 18px; }
   code { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 0.92em; }
@@ -167,7 +179,7 @@
   </header>
 
   <section class="recommend">
-    <p><strong>Best free method: public RDAP.</strong> It is the registry’s own directory over HTTPS, with a clear found or not-found answer. DNS is only a fallback, and only when a TLD has no RDAP server. Classic WHOIS is free but the wording is too inconsistent to trust for a bulk yes or no.</p>
+    <p><strong>Best free method: public RDAP.</strong> It is the registry’s own directory over HTTPS, with a clear found or not-found answer. DNS is the fallback when a TLD has no RDAP server, and also when that registry cannot be reached from the browser. Classic WHOIS is free but the wording is too inconsistent to trust for a bulk yes or no.</p>
   </section>
 
   <section class="methods" aria-label="How the three lookup methods compare">
@@ -181,7 +193,7 @@
       <p class="kicker">Hint only</p>
       <h2>DNS</h2>
       <p>NXDOMAIN means the public DNS has no such name. That usually means unregistered, but a registered domain with no nameservers looks the same. Some TLDs answer for every name, so DNS says taken when it is not a normal registration.</p>
-      <p>This app uses DNS only when IANA lists no RDAP server for that TLD. Those chips are labeled DNS, and availability from DNS is low confidence.</p>
+      <p>This app uses DNS when IANA lists no RDAP server, and when the registry server does not answer the browser. Many registries block browser requests, which is why a full scan used to show a lot of unknowns. Those chips are labeled DNS. Availability from DNS is low confidence.</p>
     </article>
     <article class="card">
       <p class="kicker">Skip for bulk</p>
@@ -241,9 +253,10 @@
   <section class="card progress-card" id="progress-card" hidden>
     <div class="progress-top">
       <strong id="progress-label">Waiting</strong>
-      <span id="progress-detail"></span>
+      <span id="progress-eta"></span>
     </div>
     <div class="bar" aria-hidden="true"><span id="progress-bar"></span></div>
+    <p class="progress-sub" id="progress-detail"></p>
   </section>
 
   <div class="toolbar">
@@ -261,7 +274,7 @@
   <div id="skipped"></div>
 
   <section class="card table-card" id="table-card">
-    <div class="empty" id="empty">Results show up here after a check. Names with the most registered TLDs rise to the top. Click a name for the per-extension detail, including whether the answer came from RDAP or DNS.</div>
+    <div class="empty" id="empty">Results show up here after a check. Names with the most registered TLDs rise to the top. Click a red, green, or amber count to list those extensions. Click a name for the full per-extension detail.</div>
     <table id="results" hidden>
       <thead>
         <tr>
@@ -276,12 +289,12 @@
       <tbody id="tbody"></tbody>
     </table>
   </section>
-  <p class="legend" id="legend" hidden>Red is taken, green looks available, amber is unknown. A failed lookup stays unknown and is never called available. RDAP availability is high confidence. DNS availability is a hint.</p>
-  <p class="footer-note" id="footer-note">Nothing is uploaded to an account. A check asks IANA for the RDAP server list, then the registry for each RDAP TLD, then Cloudflare or Google DNS-over-HTTPS only for TLDs with no RDAP server. Answers stay in this browser tab until you close it. Registry rate limits still apply, so the checker runs requests together, times out, retries, and caps how many hit one server at once.</p>
+  <p class="legend" id="legend" hidden>Red is taken, green looks available, amber is unknown. Click a count to list those extensions. A failed lookup stays unknown and is never called available. RDAP availability is high confidence. DNS availability is a hint.</p>
+  <p class="footer-note" id="footer-note">Nothing is uploaded to an account. A check asks IANA for the RDAP server list, then the registry for each RDAP TLD. If the registry cannot be reached, it asks Cloudflare or Google DNS-over-HTTPS and labels that as a DNS hint. Answers stay in this browser tab until you close it. Names are checked together, with a cap per registry so one slow server does not stall the rest.</p>
 </div>
 <script src="browser-check.js"></script>
 <script>
-const CACHE_KEY = "tld-checker-cache-v1";
+const CACHE_KEY = "tld-checker-cache-v2";
 const NAMES_KEY = "tld-checker-names";
 const TLDS_KEY = "tld-checker-tlds-v2";
 const PRESET_KEY = "tld-checker-preset";
@@ -322,6 +335,12 @@ const state = {
   activePreset: "all",
   hosted: false,
   pendingPreset: "",
+  focus: null,
+  runStartedAt: 0,
+  runDone: 0,
+  runTotal: 0,
+  etaMs: null,
+  etaRough: true,
 };
 
 let cache = loadCache();
@@ -478,7 +497,7 @@ function installPresetPayload(data) {
 function markHosted() {
   state.hosted = true;
   const note = document.getElementById("footer-note");
-  note.textContent = "This public page runs entirely in your browser. A check asks IANA for the RDAP server list, then the registry for each RDAP TLD, then Cloudflare or Google DNS only when a TLD has no RDAP server. Nothing is uploaded to an account. Answers stay in this tab until you close it.";
+  note.textContent = "This public page runs entirely in your browser. A check asks IANA for the RDAP server list, then the registry for each RDAP TLD. If the registry cannot be reached, it asks Cloudflare or Google DNS and labels that as a DNS hint. Names are checked together. Nothing is uploaded to an account. Answers stay in this tab until you close it.";
 }
 
 async function loadDirectory() {
@@ -599,17 +618,58 @@ function mixBar(counts) {
   return bar;
 }
 
-function fillChips(wrap, hits, nameAscii) {
+const STATUS_NOTES = {
+  registered: "Registered at the registry, or showing public DNS records. RDAP is the registry’s own answer. DNS means the name has records.",
+  available: "RDAP available means the registry has no record. DNS available is only a hint: a registered name with no nameservers can look the same, and the name can still be premium or reserved.",
+  unknown: "The registry could not be reached and DNS was inconclusive or failed. A failed lookup stays unknown and is never called available.",
+};
+
+function fillChips(wrap, hits, nameAscii, status) {
   hits.slice(0, CHIP_CAP).forEach((hit) => wrap.append(chip(hit)));
   if (hits.length <= CHIP_CAP) return;
   const more = el("button", "more-chips", "+" + (hits.length - CHIP_CAP).toLocaleString() + " more");
   more.type = "button";
   more.addEventListener("click", () => {
-    if (state.expanded.has(nameAscii)) state.expanded.delete(nameAscii);
-    else state.expanded.add(nameAscii);
-    renderTable();
+    const open = state.focus && state.focus.ascii === nameAscii && state.focus.status === status;
+    state.focus = open ? null : { ascii: nameAscii, status: status };
+    render();
   });
   wrap.append(more);
+}
+
+function countCell(name, status, value, klass) {
+  const td = el("td", "num");
+  const open = !!(state.focus && state.focus.ascii === name.ascii && state.focus.status === status);
+  const button = el("button", "count-btn " + klass, String(value));
+  button.type = "button";
+  button.setAttribute("aria-pressed", open ? "true" : "false");
+  const word = status === "registered" ? "registered" : status === "available" ? "available" : "unknown";
+  button.setAttribute("aria-label", value + " " + word + (open ? ", hide list" : ", show TLDs"));
+  button.title = value ? (open ? "Hide this list" : "Show these TLDs") : "None yet";
+  if (!value) button.disabled = true;
+  button.addEventListener("click", () => {
+    state.focus = open ? null : { ascii: name.ascii, status: status };
+    render();
+  });
+  td.append(button);
+  return td;
+}
+
+function statusPanel(name, status) {
+  const hits = resultList(name, status);
+  const detail = el("tr", "detail");
+  const cell = el("td");
+  cell.colSpan = 6;
+  const title = status === "registered" ? "Registered" : status === "available" ? "Available" : "Unknown";
+  cell.append(el("p", "status-note", title + " · " + hits.length.toLocaleString() + ". " + STATUS_NOTES[status]));
+  const scroll = el("div", "status-panel");
+  const wrap = el("div", "chips");
+  if (!hits.length) wrap.append(el("span", "frac", "None yet."));
+  else hits.forEach((hit) => wrap.append(chip(hit)));
+  scroll.append(wrap);
+  cell.append(scroll);
+  detail.append(cell);
+  return detail;
 }
 
 function resultList(name, status) {
@@ -665,19 +725,23 @@ function renderTable() {
     nameCell.append(mixBar(counts));
     if (counts.done < counts.total) nameCell.append(el("div", "frac", counts.done + " / " + counts.total + " TLDs"));
     tr.append(nameCell);
-    tr.append(el("td", "num taken-ink", String(counts.registered)));
-    tr.append(el("td", "num free-ink", String(counts.available)));
-    tr.append(el("td", "num unk-ink", String(counts.unknown)));
+    tr.append(countCell(name, "registered", counts.registered, "taken-ink"));
+    tr.append(countCell(name, "available", counts.available, "free-ink"));
+    tr.append(countCell(name, "unknown", counts.unknown, "unk-ink"));
     const takenCell = el("td");
     const takenWrap = el("div", "chips");
-    fillChips(takenWrap, resultList(name, "registered"), name.ascii);
+    fillChips(takenWrap, resultList(name, "registered"), name.ascii, "registered");
     takenCell.append(takenWrap);
     const freeCell = el("td");
     const freeWrap = el("div", "chips");
-    fillChips(freeWrap, resultList(name, "available"), name.ascii);
+    fillChips(freeWrap, resultList(name, "available"), name.ascii, "available");
     freeCell.append(freeWrap);
     tr.append(takenCell, freeCell);
     tbody.append(tr);
+    if (state.focus && state.focus.ascii === name.ascii) {
+      tbody.append(statusPanel(name, state.focus.status));
+      return;
+    }
     if (!state.expanded.has(name.ascii)) return;
     const detail = el("tr", "detail");
     const cell = el("td");
@@ -710,8 +774,42 @@ function renderTable() {
   });
 }
 
+function formatDuration(ms) {
+  const sec = Math.max(1, Math.round(ms / 1000));
+  if (sec < 90) return sec === 1 ? "1 second" : sec + " seconds";
+  const min = Math.max(1, Math.round(sec / 60));
+  if (min < 60) return min === 1 ? "1 minute" : min + " minutes";
+  const hr = Math.floor(min / 60);
+  const rem = min % 60;
+  const hours = hr === 1 ? "1 hour" : hr + " hours";
+  if (!rem) return hours;
+  const minutes = rem === 1 ? "1 minute" : rem + " minutes";
+  return hours + " " + minutes;
+}
+
+function etaPhrase() {
+  if (!state.runTotal || state.etaMs == null) return "Estimating time left…";
+  const lead = state.etaRough ? "Roughly " : "About ";
+  return lead + formatDuration(state.etaMs) + " left";
+}
+
+function seedEta(count) {
+  const parallel = Math.min(28, Math.max(1, count));
+  return (count / parallel) * 1600;
+}
+
+function movingNames() {
+  let moving = 0;
+  state.names.forEach((name) => {
+    const counts = metrics(name);
+    if (counts.done > 0 && counts.done < counts.total) moving += 1;
+  });
+  return moving;
+}
+
 function renderProgress() {
   const card = document.getElementById("progress-card");
+  const etaEl = document.getElementById("progress-eta");
   if (!state.started) {
     card.hidden = true;
     return;
@@ -723,17 +821,20 @@ function renderProgress() {
   const detail = document.getElementById("progress-detail");
   const pct = state.lookupsTotal ? Math.round((state.lookupsDone / state.lookupsTotal) * 100) : 0;
   document.getElementById("progress-bar").style.width = pct + "%";
+  label.textContent = namesDone + " / " + totalNames + " names";
   if (!state.running && state.lookupsDone >= state.lookupsTotal) {
-    label.textContent = namesDone + " / " + totalNames + " names";
-    detail.textContent = state.lookupsTotal ? "Finished " + state.lookupsDone + " lookups" : "Nothing to look up";
+    etaEl.textContent = "";
+    detail.textContent = state.lookupsTotal ? "Finished " + state.lookupsDone.toLocaleString() + " lookups" : "Nothing to look up";
   } else if (state.running) {
-    label.textContent = namesDone + " / " + totalNames + " names";
-    detail.textContent = (state.currentName ? "Checking " + state.currentName + " · " : "") + state.lookupsDone + " / " + state.lookupsTotal + " lookups";
+    etaEl.textContent = etaPhrase();
+    const moving = movingNames() || Math.min(28, totalNames);
+    const noun = moving === 1 ? " name at once · " : " names at once · ";
+    detail.textContent = moving + noun + state.lookupsDone.toLocaleString() + " / " + state.lookupsTotal.toLocaleString() + " lookups";
   } else {
-    label.textContent = namesDone + " / " + totalNames + " names";
-    detail.textContent = "Stopped at " + state.lookupsDone + " / " + state.lookupsTotal + " lookups";
+    etaEl.textContent = "";
+    detail.textContent = "Stopped at " + state.lookupsDone.toLocaleString() + " / " + state.lookupsTotal.toLocaleString() + " lookups";
   }
-  document.title = state.running ? "(" + namesDone + "/" + totalNames + ") Bulk TLD checker" : "Bulk TLD checker";
+  document.title = state.running && state.runTotal ? etaPhrase() + " · Bulk TLD checker" : "Bulk TLD checker";
 }
 
 function renderStats() {
@@ -785,12 +886,27 @@ function render() {
 }
 
 function scheduleRender() {
-  if (renderQueued) return;
-  renderQueued = true;
-  requestAnimationFrame(() => {
+  if (!state.running) {
     renderQueued = false;
     render();
-  });
+    return;
+  }
+  if (renderQueued) return;
+  renderQueued = true;
+  setTimeout(() => {
+    renderQueued = false;
+    render();
+  }, 140);
+}
+
+function updateEta() {
+  const elapsed = performance.now() - state.runStartedAt;
+  if (state.runDone < 8 || elapsed < 500) return;
+  const rate = state.runDone / elapsed;
+  const remaining = Math.max(0, state.runTotal - state.runDone);
+  const next = remaining / Math.max(rate, 0.000001);
+  state.etaMs = state.etaRough || state.etaMs == null ? next : state.etaMs * 0.65 + next * 0.35;
+  state.etaRough = false;
 }
 
 function applyResult(result, fromCache) {
@@ -800,6 +916,8 @@ function applyResult(result, fromCache) {
   if (!fromCache) {
     cache[key] = result;
     scheduleCacheFlush();
+    state.runDone += 1;
+    updateEta();
   }
   if (isNew) state.lookupsDone += 1;
   const pending = state.names.find((name) => metrics(name).done < state.tlds.length);
@@ -870,18 +988,26 @@ async function runCheck(mode) {
   if (parsed.bootstrapError) showBanner(parsed.bootstrapError + " Every TLD will use a DNS hint.", false);
   state.started = true;
   state.results = new Map();
+  state.focus = null;
   state.lookupsTotal = state.names.length * state.tlds.length;
   state.lookupsDone = 0;
-  const needed = [];
-  state.names.forEach((name) => {
+  const lanes = state.names.map((name) => {
+    const pairs = [];
     state.tlds.forEach((tld) => {
       const key = cacheKey(name.ascii, tld.ascii);
       const hit = cache[key];
       if (hit && hit.status) state.results.set(key, hit);
-      else needed.push({ name: name.ascii, tld: tld.ascii });
+      else pairs.push({ name: name.ascii, display: name.display, tld: tld.ascii, tldDisplay: tld.display });
     });
+    return pairs;
   });
+  const needed = window.TldBrowser ? TldBrowser.interleave(lanes) : lanes.flat();
   state.lookupsDone = state.results.size;
+  state.runStartedAt = performance.now();
+  state.runDone = 0;
+  state.runTotal = needed.length;
+  state.etaRough = true;
+  state.etaMs = needed.length ? seedEta(needed.length) : null;
   state.running = needed.length > 0;
   const pending = state.names.find((name) => metrics(name).done < state.tlds.length);
   state.currentName = pending ? pending.display : "";
