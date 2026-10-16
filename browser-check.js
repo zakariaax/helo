@@ -14,8 +14,10 @@
     "co.th", "com.pl", "co.il", "com.pt", "com.es",
   ].sort(function (a, b) { return b.split(".").length - a.split(".").length; });
   const POSITIVE = { 1: 1, 2: 1, 5: 1, 15: 1, 16: 1, 28: 1, 33: 1, 43: 1, 65: 1 };
-  const globalLimit = makeLimiter(8);
+  const GLOBAL_LIMIT = 28;
+  const globalLimit = makeLimiter(GLOBAL_LIMIT);
   const hostLimits = {};
+  const DOH_HOST_LIMIT = { "cloudflare-dns.com": 10, "dns.google": 10 };
   let suffixes = null;
   let publication = null;
   let bootstrapError = null;
@@ -37,8 +39,30 @@
   }
 
   function hostLimiter(host) {
-    if (!hostLimits[host]) hostLimits[host] = makeLimiter(2);
+    const max = DOH_HOST_LIMIT[host] || 4;
+    if (!hostLimits[host]) hostLimits[host] = makeLimiter(max);
     return hostLimits[host];
+  }
+
+  function interleave(groups) {
+    const lanes = groups.map(function (pairs, index) {
+      if (!pairs || pairs.length < 2) return (pairs || []).slice();
+      const shift = index % pairs.length;
+      return pairs.slice(shift).concat(pairs.slice(0, shift));
+    });
+    const cursors = lanes.map(function () { return 0; });
+    const out = [];
+    let pending = true;
+    while (pending) {
+      pending = false;
+      for (let lane = 0; lane < lanes.length; lane += 1) {
+        if (cursors[lane] >= lanes[lane].length) continue;
+        out.push(lanes[lane][cursors[lane]]);
+        cursors[lane] += 1;
+        pending = true;
+      }
+    }
+    return out;
   }
 
   function sleep(ms) {
@@ -323,9 +347,14 @@
       confidence: "none",
       detail: "The RDAP lookup failed. Marked unknown, not available.",
     };
+    const path = "/domain/" + encodeURIComponent(fqdn).replace(/%2E/gi, ".");
     for (let index = 0; index < Math.min(bases.length, 2); index += 1) {
       const base = bases[index].replace(/\/$/, "");
-      const hit = await httpGet(base + "/domain/" + encodeURIComponent(fqdn).replace(/%2E/gi, "."), "application/rdap+json, application/json", 7000, 1);
+      let hit = await httpGet(base + path, "application/rdap+json, application/json", 4000, 0);
+      if (hit.status === 429) {
+        await sleep(250);
+        hit = await httpGet(base + path, "application/rdap+json, application/json", 4000, 0);
+      }
       const classified = classifyRdap(hit.status, hit.body);
       if (classified) return classified;
       if (hit.status === 429) last.detail = "The RDAP server rate-limited this lookup. Marked unknown, not available.";
@@ -347,7 +376,7 @@
       "https://dns.google/resolve?name=" + name + "&type=" + type,
     ];
     for (let index = 0; index < urls.length; index += 1) {
-      const hit = await httpGet(urls[index], "application/dns-json", 5000, 1);
+      const hit = await httpGet(urls[index], "application/dns-json", 3500, 0);
       if (hit.status === 200 && hit.body) {
         try {
           const data = JSON.parse(hit.body);
@@ -408,6 +437,15 @@
         outcome.detail = "No public RDAP server is listed for ." + item.tld + ". " + outcome.detail;
       } else {
         outcome = await checkRdap(fqdn, bases);
+        if (outcome.status === "unknown") {
+          const dns = await checkDns(fqdn);
+          if (dns.status === "unknown") {
+            dns.detail = "The registry did not answer, and DNS failed too. Marked unknown, not available.";
+          } else {
+            dns.detail = "The registry did not answer, so this is a DNS hint. " + dns.detail;
+          }
+          outcome = dns;
+        }
       }
     }
     return {
@@ -474,7 +512,7 @@
       });
     }
     let cursor = 0;
-    const workers = Math.min(8, Math.max(1, checks.length));
+    const workers = Math.min(GLOBAL_LIMIT, Math.max(1, checks.length));
     async function worker() {
       while (cursor < checks.length) {
         if (signal && signal.aborted) return;
@@ -510,6 +548,7 @@
     loadDefaults: loadDefaults,
     loadBootstrap: loadBootstrap,
     checkAll: checkAll,
+    interleave: interleave,
     punyDecode: punyDecode,
     extractName: extractName,
   };

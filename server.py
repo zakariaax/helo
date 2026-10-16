@@ -190,7 +190,7 @@ class Handler(BaseHTTPRequestHandler):
                     }
                 )
 
-        workers = min(24, max(1, len(pairs)))
+        workers = min(28, max(1, len(pairs)))
         pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="tld")
         started = time.time()
         try:

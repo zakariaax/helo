@@ -1,9 +1,11 @@
-"""Free bulk TLD checks: public RDAP, then DNS only when RDAP is unpublished.
+"""Free bulk TLD checks: public RDAP, then DNS.
 
 RDAP bases come from the IANA bootstrap file. A domain query that returns
 HTTP 404 is a not-found answer from the registry. DNS (DNS-over-HTTPS, then
-the local resolver) is used only when IANA lists no RDAP server for that
-suffix. A failed lookup stays "unknown" and is never reported as available.
+the local resolver) is used when IANA lists no RDAP server, and also when
+the registry does not answer. A failed lookup stays "unknown" and is never
+reported as available. A DNS answer after a missed RDAP call is labeled as
+a hint.
 """
 
 from __future__ import annotations
@@ -21,17 +23,19 @@ from pathlib import Path
 USER_AGENT = "BulkTLDChecker/1.0 (local; public RDAP and DNS only)"
 BOOTSTRAP_URL = "https://data.iana.org/rdap/dns.json"
 
-RDAP_TIMEOUT = 6.0
-RDAP_RETRIES = 1
-DNS_TIMEOUT = 5.0
-DNS_RETRIES = 1
+RDAP_TIMEOUT = 4.0
+RDAP_RETRIES = 0
+DNS_TIMEOUT = 3.5
+DNS_RETRIES = 0
 
 # Global cap, then a per-host cap. Acquire the global slot first so a thread
 # never holds a host slot while waiting for the global one.
-_GLOBAL = threading.Semaphore(24)
+_GLOBAL = threading.Semaphore(28)
 _HOSTS: dict[str, threading.Semaphore] = {}
 _HOSTS_LOCK = threading.Lock()
 _HOST_LIMIT = 4
+_DOH_LIMIT = 10
+_DOH_HOSTS = frozenset({"cloudflare-dns.com", "dns.google"})
 
 MAX_NAMES = 150
 MAX_TLDS = 5000
@@ -137,7 +141,8 @@ class _HostSlot:
             with _HOSTS_LOCK:
                 sem = _HOSTS.get(self.host)
                 if sem is None:
-                    sem = threading.Semaphore(_HOST_LIMIT)
+                    limit = _DOH_LIMIT if self.host in _DOH_HOSTS else _HOST_LIMIT
+                    sem = threading.Semaphore(limit)
                     _HOSTS[self.host] = sem
             sem.acquire()
             self._host_sem = sem
@@ -373,13 +378,22 @@ def check_rdap(fqdn: str, bases: list[str]) -> dict:
         "confidence": "none",
         "detail": "The RDAP lookup failed. Marked unknown, not available.",
     }
-    for base in bases[:3]:
+    for base in bases[:2]:
+        url = rdap_domain_url(base, fqdn)
         status, body, err = http_get(
-            rdap_domain_url(base, fqdn),
+            url,
             "application/rdap+json, application/json",
             RDAP_TIMEOUT,
-            RDAP_RETRIES,
+            0,
         )
+        if status == 429:
+            time.sleep(0.25)
+            status, body, err = http_get(
+                url,
+                "application/rdap+json, application/json",
+                RDAP_TIMEOUT,
+                0,
+            )
         classified = classify_rdap(status, body)
         if classified:
             return classified
@@ -389,10 +403,7 @@ def check_rdap(fqdn: str, bases: list[str]) -> dict:
             "confidence": "none",
             "detail": _rdap_failure_detail(status, err),
         }
-        # A definitive HTTP answer that we could not classify should not be retried
-        # against another base if the server clearly responded with a client error
-        # other than 404 (already classified) — except 429/5xx, where another base may work.
-        if status is not None and status not in (429, 500, 502, 503, 504) and err is None:
+        if status is not None and status not in (429, 500, 502, 503, 504):
             break
     return last
 
@@ -555,6 +566,15 @@ def check_dns(fqdn: str) -> dict:
     return classified
 
 
+def _dns_after_rdap_miss(fqdn: str) -> dict:
+    dns = check_dns(fqdn)
+    if dns.get("status") == "unknown":
+        dns["detail"] = "The registry did not answer, and DNS failed too. Marked unknown, not available."
+    else:
+        dns["detail"] = "The registry did not answer, so this is a DNS hint. " + dns["detail"]
+    return dns
+
+
 def check_fqdn(fqdn: str, boot: Bootstrap) -> dict:
     if boot.error or not boot.suffixes:
         result = check_dns(fqdn)
@@ -566,9 +586,10 @@ def check_fqdn(fqdn: str, boot: Bootstrap) -> dict:
         suffix = fqdn.split(".", 1)[-1]
         result["detail"] = f"No public RDAP server is listed for .{suffix}. " + result["detail"]
         return result
-    # RDAP exists. A failed RDAP call stays unknown — DNS must not turn a registry
-    # outage into a false "available".
-    return check_rdap(fqdn, bases)
+    rdap = check_rdap(fqdn, bases)
+    if rdap.get("status") != "unknown":
+        return rdap
+    return _dns_after_rdap_miss(fqdn)
 
 
 def _cache_get(key: tuple) -> dict | None:

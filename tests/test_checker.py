@@ -152,13 +152,49 @@ class ClassifyTests(unittest.TestCase):
 
         calls = []
 
-        def rdap_down(url, accept, timeout, retries):
+        def rdap_miss_dns_nx(url, accept, timeout, retries):
+            calls.append(url)
+            if "rdap.example" in url:
+                return None, b"", "TimeoutError"
+            return 200, b'{"Status":3}', None
+
+        with mock.patch.object(checker, "http_get", side_effect=rdap_miss_dns_nx):
+            result = checker.check_pair("example", "example", checker.ParsedName("com", "com"), boot, fresh=True)
+        self.assertEqual(result["status"], "available")
+        self.assertEqual(result["method"], "dns")
+        self.assertIn("DNS hint", result["detail"])
+        self.assertTrue(any("rdap.example" in url for url in calls))
+        self.assertTrue(any("dns" in url for url in calls))
+
+        calls.clear()
+
+        def both_down(url, accept, timeout, retries):
             calls.append(url)
             return None, b"", "TimeoutError"
 
-        with mock.patch.object(checker, "http_get", side_effect=rdap_down):
+        unknown_dns = {
+            "status": "unknown",
+            "method": "dns",
+            "confidence": "none",
+            "detail": "DNS lookup failed. Marked unknown, not available.",
+        }
+        with mock.patch.object(checker, "http_get", side_effect=both_down), mock.patch.object(
+            checker, "_system_dns", return_value=unknown_dns
+        ):
             result = checker.check_pair("example", "example", checker.ParsedName("com", "com"), boot, fresh=True)
         self.assertEqual(result["status"], "unknown")
+        self.assertIn("DNS failed too", result["detail"])
+        self.assertTrue(any("dns" in url for url in calls))
+
+        calls.clear()
+
+        def rdap_missing(url, accept, timeout, retries):
+            calls.append(url)
+            return 404, b"", None
+
+        with mock.patch.object(checker, "http_get", side_effect=rdap_missing):
+            result = checker.check_pair("freshname", "freshname", checker.ParsedName("com", "com"), boot, fresh=True)
+        self.assertEqual(result["status"], "available")
         self.assertEqual(result["method"], "rdap")
         self.assertTrue(calls)
         self.assertTrue(all("dns" not in url for url in calls))
