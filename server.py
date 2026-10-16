@@ -67,6 +67,8 @@ class Handler(BaseHTTPRequestHandler):
                     "suffixes": sorted(boot.suffixes),
                 }
             )
+        elif path in ("/browser-check.js", "/tld_presets.json"):
+            self._serve_static(path[1:])
         elif path == "/favicon.ico":
             self.send_response(204)
             self.end_headers()
@@ -229,6 +231,21 @@ class Handler(BaseHTTPRequestHandler):
             return
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(payload)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def _serve_static(self, name: str) -> None:
+        path = INDEX_PATH.parent / name
+        try:
+            payload = path.read_bytes()
+        except OSError:
+            self._send_json({"error": "Not found."}, status=404)
+            return
+        kind = "application/json" if name.endswith(".json") else "text/javascript; charset=utf-8"
+        self.send_response(200)
+        self.send_header("Content-Type", kind)
         self.send_header("Content-Length", str(len(payload)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()

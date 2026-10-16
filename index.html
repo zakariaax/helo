@@ -279,6 +279,7 @@
   <p class="legend" id="legend" hidden>Red is taken, green looks available, amber is unknown. A failed lookup stays unknown and is never called available. RDAP availability is high confidence. DNS availability is a hint.</p>
   <p class="footer-note" id="footer-note">Nothing is uploaded to an account. A check asks IANA for the RDAP server list, then the registry for each RDAP TLD, then Cloudflare or Google DNS-over-HTTPS only for TLDs with no RDAP server. Answers stay in this browser tab until you close it. Registry rate limits still apply, so the checker runs requests together, times out, retries, and caps how many hit one server at once.</p>
 </div>
+<script src="browser-check.js"></script>
 <script>
 const CACHE_KEY = "tld-checker-cache-v1";
 const NAMES_KEY = "tld-checker-names";
@@ -319,6 +320,7 @@ const state = {
   hasUnknown: false,
   presetText: {},
   activePreset: "all",
+  hosted: false,
   pendingPreset: "",
 };
 
@@ -457,27 +459,63 @@ function scheduleDraft() {
   }, 150);
 }
 
+function installPresetPayload(data) {
+  const presets = data.presets || {};
+  ["all", "famous", "launch", "countries"].forEach((id) => {
+    const list = presets[id] || [];
+    state.presetText[id] = list.join("\n");
+    const count = document.querySelector('[data-count="' + id + '"]');
+    if (count && list.length) count.textContent = formatCount(list.length);
+  });
+  state.defaultTldText = state.presetText.all || data.text || "";
+  if (state.pendingPreset && state.presetText[state.pendingPreset]) applyPreset(state.pendingPreset);
+  else if (!sessionStorage.getItem(TLDS_KEY)) applyPreset(data.defaultPreset || "all");
+  else syncPresetFromText();
+  if (data.bootstrapError) state.bootstrapError = data.bootstrapError;
+  if (data.publication) state.publication = data.publication;
+}
+
+function markHosted() {
+  state.hosted = true;
+  const note = document.getElementById("footer-note");
+  note.textContent = "This public page runs entirely in your browser. A check asks IANA for the RDAP server list, then the registry for each RDAP TLD, then Cloudflare or Google DNS only when a TLD has no RDAP server. Nothing is uploaded to an account. Answers stay in this tab until you close it.";
+}
+
 async function loadDirectory() {
+  let hosted = false;
   try {
     const response = await fetch("/api/defaults");
     if (!response.ok) throw new Error("defaults");
-    const data = await response.json();
-    const presets = data.presets || {};
-    ["all", "famous", "launch", "countries"].forEach((id) => {
-      const list = presets[id] || [];
-      state.presetText[id] = list.join("\n");
-      const count = document.querySelector('[data-count="' + id + '"]');
-      if (count && list.length) count.textContent = formatCount(list.length);
-    });
-    state.defaultTldText = state.presetText.all || data.text || "";
-    if (state.pendingPreset && state.presetText[state.pendingPreset]) applyPreset(state.pendingPreset);
-    else if (!sessionStorage.getItem(TLDS_KEY)) applyPreset(data.defaultPreset || "all");
-    else syncPresetFromText();
-    if (data.bootstrapError) state.bootstrapError = data.bootstrapError;
-    if (data.publication) state.publication = data.publication;
+    installPresetPayload(await response.json());
   } catch (error) {
-    if (!tldsEl.value) tldsEl.value = "com\nnet\norg\nio\nco\nai\napp\ndev\nme\nuk\nde";
-    showBanner("The checker server is not responding. From this folder run python3 server.py and open http://127.0.0.1:8765.", true);
+    if (!window.TldBrowser) {
+      if (!tldsEl.value) tldsEl.value = "com\nnet\norg\nio\nco\nai\napp\ndev\nme\nuk\nde";
+      showBanner("The checker server is not responding. From this folder run python3 server.py and open http://127.0.0.1:8765.", true);
+    } else {
+      try {
+        installPresetPayload(await TldBrowser.loadDefaults());
+        hosted = true;
+        markHosted();
+      } catch (inner) {
+        if (!tldsEl.value) tldsEl.value = "com\nnet\norg\nio\nco\nai\napp\ndev\nme\nuk\nde";
+        showBanner("Could not load the TLD list for this page.", true);
+      }
+    }
+  }
+  if (hosted) {
+    try {
+      const boot = await TldBrowser.loadBootstrap();
+      state.suffixes = new Set(boot.suffixes || []);
+      state.bootstrapError = boot.error || null;
+      state.publication = boot.publication || state.publication;
+      state.suffixCount = boot.count || 0;
+      if (boot.error) showBanner(boot.error + " Checks will use DNS hints only.", false);
+    } catch (error) {
+      state.bootstrapError = "Could not download the IANA RDAP directory.";
+      showBanner(state.bootstrapError + " Checks will use DNS hints only.", false);
+    }
+    renderCoverage();
+    return;
   }
   try {
     const response = await fetch("/api/rdap-suffixes");
@@ -797,19 +835,23 @@ async function runCheck(mode) {
   document.getElementById("stop").hidden = false;
   document.getElementById("check").textContent = "Preparing…";
   let parsed;
-  try {
-    const response = await fetch("/api/parse", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ names: namesEl.value, tlds: tldsEl.value }),
-      signal: state.controller.signal,
-    });
-    parsed = await response.json();
-    if (!response.ok) throw new Error(parsed.error || "Could not read that list.");
-  } catch (error) {
-    if (error.name !== "AbortError") showBanner(error.message || "Could not reach the local checker.", true);
-    finishRun(false);
-    return;
+  if (state.hosted && window.TldBrowser) {
+    parsed = TldBrowser.parse(namesEl.value, tldsEl.value);
+  } else {
+    try {
+      const response = await fetch("/api/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ names: namesEl.value, tlds: tldsEl.value }),
+        signal: state.controller.signal,
+      });
+      parsed = await response.json();
+      if (!response.ok) throw new Error(parsed.error || "Could not read that list.");
+    } catch (error) {
+      if (error.name !== "AbortError") showBanner(error.message || "Could not reach the local checker.", true);
+      finishRun(false);
+      return;
+    }
   }
   state.skipped = parsed.skipped || [];
   state.skippedCount = parsed.skippedCount || 0;
@@ -850,16 +892,23 @@ async function runCheck(mode) {
   }
   document.getElementById("check").textContent = "Checking…";
   try {
-    for (let index = 0; index < needed.length; index += CHECK_CHUNK) {
-      if (state.controller.signal.aborted) break;
-      const response = await fetch("/api/check", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-        body: JSON.stringify({ checks: needed.slice(index, index + CHECK_CHUNK), fresh: fresh }),
+    if (state.hosted && window.TldBrowser) {
+      await TldBrowser.checkAll(needed, {
         signal: state.controller.signal,
+        onResult: (event) => applyResult(event, false),
       });
-      if (!response.ok || !response.body) throw new Error(await readError(response));
-      await readStream(response.body);
+    } else {
+      for (let index = 0; index < needed.length; index += CHECK_CHUNK) {
+        if (state.controller.signal.aborted) break;
+        const response = await fetch("/api/check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+          body: JSON.stringify({ checks: needed.slice(index, index + CHECK_CHUNK), fresh: fresh }),
+          signal: state.controller.signal,
+        });
+        if (!response.ok || !response.body) throw new Error(await readError(response));
+        await readStream(response.body);
+      }
     }
   } catch (error) {
     if (error.name !== "AbortError") showBanner(error.message || "The check stopped because a lookup request failed.", true);

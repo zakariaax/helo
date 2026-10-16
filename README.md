@@ -36,15 +36,15 @@ You can still edit or paste your own list. Up to 150 names per run.
 
 ## Setup
 
-Python 3.9 or newer. No packages to install.
+The public site is [https://zakariaax.github.io/helo/](https://zakariaax.github.io/helo/). It runs in the browser, with no install.
+
+To run the same page on this computer:
 
 ```bash
 python3 server.py
 ```
 
-Open http://127.0.0.1:8765
-
-The server listens on your machine only. Lookups go from your computer to IANA, the registry RDAP servers, and public DNS resolvers.
+Open http://127.0.0.1:8765. The local server listens on this machine only.
 
 ## Tests
 
