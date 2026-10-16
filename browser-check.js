@@ -26,14 +26,36 @@
     let active = 0;
     const waiting = [];
     return {
-      async acquire() {
-        if (active >= max) await new Promise(function (resolve) { waiting.push(resolve); });
+      async acquire(signal) {
+        if (signal && signal.aborted) return false;
+        if (active >= max) {
+          const granted = await new Promise(function (resolve) {
+            let settled = false;
+            const entry = {
+              resolve: function (value) {
+                if (settled) return;
+                settled = true;
+                resolve(value);
+              },
+            };
+            waiting.push(entry);
+            if (signal) {
+              signal.addEventListener("abort", function () {
+                const index = waiting.indexOf(entry);
+                if (index >= 0) waiting.splice(index, 1);
+                entry.resolve(false);
+              }, { once: true });
+            }
+          });
+          if (!granted) return false;
+        }
         active += 1;
+        return true;
       },
       release() {
         active -= 1;
         const next = waiting.shift();
-        if (next) next();
+        if (next) next.resolve(true);
       },
     };
   }
@@ -65,8 +87,26 @@
     return out;
   }
 
-  function sleep(ms) {
-    return new Promise(function (resolve) { setTimeout(resolve, ms); });
+  function sleep(ms, signal) {
+    return new Promise(function (resolve) {
+      const timer = setTimeout(done, ms);
+      function done() {
+        if (signal) signal.removeEventListener("abort", done);
+        clearTimeout(timer);
+        resolve();
+      }
+      if (signal) {
+        if (signal.aborted) {
+          done();
+          return;
+        }
+        signal.addEventListener("abort", done, { once: true });
+      }
+    });
+  }
+
+  function stopped(signal) {
+    return !!(signal && signal.aborted);
   }
 
   function punyDecode(input) {
@@ -264,16 +304,28 @@
     };
   }
 
-  async function httpGet(url, accept, timeout, retries) {
+  async function httpGet(url, accept, timeout, retries, signal) {
+    if (stopped(signal)) return { status: null, body: "", error: "AbortError" };
     const host = new URL(url).hostname || "unknown";
     const limiter = hostLimiter(host);
-    await globalLimit.acquire();
-    await limiter.acquire();
+    const globalOk = await globalLimit.acquire(signal);
+    if (!globalOk) return { status: null, body: "", error: "AbortError" };
+    let hostHeld = false;
     try {
+      const hostOk = await limiter.acquire(signal);
+      if (!hostOk) return { status: null, body: "", error: "AbortError" };
+      hostHeld = true;
       let delay = 350;
       let lastError = "request failed";
       for (let attempt = 0; attempt <= retries; attempt += 1) {
+        if (stopped(signal)) return { status: null, body: "", error: "AbortError" };
         const controller = new AbortController();
+        let userStop = false;
+        const onAbort = function () {
+          userStop = true;
+          controller.abort();
+        };
+        if (signal) signal.addEventListener("abort", onAbort);
         const timer = setTimeout(function () { controller.abort(); }, timeout);
         try {
           const response = await fetch(url, {
@@ -283,26 +335,28 @@
           });
           const body = await response.text();
           if ((response.status === 429 || response.status >= 500) && attempt < retries) {
-            await sleep(delay);
+            await sleep(delay, signal);
             delay *= 2;
             continue;
           }
           return { status: response.status, body: body, error: null };
         } catch (error) {
+          if (userStop || stopped(signal)) return { status: null, body: "", error: "AbortError" };
           lastError = error && error.name ? error.name : "error";
           if (attempt < retries) {
-            await sleep(delay);
+            await sleep(delay, signal);
             delay *= 2;
             continue;
           }
           return { status: null, body: "", error: lastError };
         } finally {
           clearTimeout(timer);
+          if (signal) signal.removeEventListener("abort", onAbort);
         }
       }
       return { status: null, body: "", error: lastError };
     } finally {
-      limiter.release();
+      if (hostHeld) limiter.release();
       globalLimit.release();
     }
   }
@@ -340,7 +394,7 @@
     return [];
   }
 
-  async function checkRdap(fqdn, bases) {
+  async function checkRdap(fqdn, bases, signal) {
     let last = {
       status: "unknown",
       method: "rdap",
@@ -349,11 +403,15 @@
     };
     const path = "/domain/" + encodeURIComponent(fqdn).replace(/%2E/gi, ".");
     for (let index = 0; index < Math.min(bases.length, 2); index += 1) {
+      if (stopped(signal)) return null;
       const base = bases[index].replace(/\/$/, "");
-      let hit = await httpGet(base + path, "application/rdap+json, application/json", 4000, 0);
+      let hit = await httpGet(base + path, "application/rdap+json, application/json", 4000, 0, signal);
+      if (hit.error === "AbortError" || stopped(signal)) return null;
       if (hit.status === 429) {
-        await sleep(250);
-        hit = await httpGet(base + path, "application/rdap+json, application/json", 4000, 0);
+        await sleep(250, signal);
+        if (stopped(signal)) return null;
+        hit = await httpGet(base + path, "application/rdap+json, application/json", 4000, 0, signal);
+        if (hit.error === "AbortError" || stopped(signal)) return null;
       }
       const classified = classifyRdap(hit.status, hit.body);
       if (classified) return classified;
@@ -369,14 +427,16 @@
     return payload && (payload.Answer || []).some(function (answer) { return POSITIVE[answer.type]; });
   }
 
-  async function queryDoh(fqdn, type) {
+  async function queryDoh(fqdn, type, signal) {
     const name = encodeURIComponent(fqdn);
     const urls = [
       "https://cloudflare-dns.com/dns-query?name=" + name + "&type=" + type,
       "https://dns.google/resolve?name=" + name + "&type=" + type,
     ];
     for (let index = 0; index < urls.length; index += 1) {
-      const hit = await httpGet(urls[index], "application/dns-json", 3500, 0);
+      if (stopped(signal)) return null;
+      const hit = await httpGet(urls[index], "application/dns-json", 3500, 0, signal);
+      if (hit.error === "AbortError" || stopped(signal)) return null;
       if (hit.status === 200 && hit.body) {
         try {
           const data = JSON.parse(hit.body);
@@ -415,30 +475,37 @@
     };
   }
 
-  async function checkDns(fqdn) {
-    const nsPayload = await queryDoh(fqdn, "NS");
+  async function checkDns(fqdn, signal) {
+    const nsPayload = await queryDoh(fqdn, "NS", signal);
+    if (stopped(signal)) return null;
     let addresses = [];
     if (!nsPayload || (Number(nsPayload.Status) === 0 && !hasAnswers(nsPayload))) {
-      addresses = [await queryDoh(fqdn, "A"), await queryDoh(fqdn, "AAAA")];
+      addresses = [await queryDoh(fqdn, "A", signal), await queryDoh(fqdn, "AAAA", signal)];
+      if (stopped(signal)) return null;
     }
     return classifyDns(nsPayload, addresses);
   }
 
-  async function checkOne(item) {
+  async function checkOne(item, signal) {
+    if (stopped(signal)) return null;
     const fqdn = item.name + "." + item.tld;
     let outcome;
     if (bootstrapError || !suffixes) {
-      outcome = await checkDns(fqdn);
+      outcome = await checkDns(fqdn, signal);
+      if (!outcome || stopped(signal)) return null;
       outcome.detail = "No RDAP directory was available, so this used DNS only. " + outcome.detail;
     } else {
       const bases = urlsFor(fqdn);
       if (!bases.length) {
-        outcome = await checkDns(fqdn);
+        outcome = await checkDns(fqdn, signal);
+        if (!outcome || stopped(signal)) return null;
         outcome.detail = "No public RDAP server is listed for ." + item.tld + ". " + outcome.detail;
       } else {
-        outcome = await checkRdap(fqdn, bases);
+        outcome = await checkRdap(fqdn, bases, signal);
+        if (!outcome || stopped(signal)) return null;
         if (outcome.status === "unknown") {
-          const dns = await checkDns(fqdn);
+          const dns = await checkDns(fqdn, signal);
+          if (!dns || stopped(signal)) return null;
           if (dns.status === "unknown") {
             dns.detail = "The registry did not answer, and DNS failed too. Marked unknown, not available.";
           } else {
@@ -519,9 +586,11 @@
         const item = checks[cursor];
         cursor += 1;
         try {
-          const result = await checkOne(item);
+          const result = await checkOne(item, signal);
+          if (!result || stopped(signal)) return;
           if (options.onResult) options.onResult(result);
         } catch (error) {
+          if (stopped(signal)) return;
           if (options.onResult) {
             options.onResult({
               type: "result",
