@@ -9,6 +9,8 @@ const DEFAULT_THEME = {
   card: "#ffffff",
   muted: "#637381",
   line: "#dfe3e8",
+  muted: "#637381",
+  line: "#dfe3e8",
   fontSize: 15,
   font: "Public Sans",
   heading: "Public Sans",
