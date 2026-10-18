@@ -69,7 +69,14 @@
   .preset strong { display: block; margin-top: 6px; }
   .preset small { display: block; margin-top: 4px; color: var(--muted); font-size: 13px; line-height: 1.35; }
   .preset-note { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+  .mode-switch { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; }
+  .mode {
+    border-radius: 999px; padding: 8px 14px; border: 1px solid var(--line); background: transparent;
+  }
+  .mode.is-on { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 700; }
+  .mode-note { color: var(--muted); font-size: 13px; }
   .editors { display: grid; grid-template-columns: 1.4fr 0.8fr; gap: 12px; margin-bottom: 12px; }
+  .editors.manual #field-tlds { opacity: 0.55; }
   label.field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
   .label-row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
   .label-row span { color: var(--muted); font-size: 13px; }
@@ -217,13 +224,19 @@
   </div>
   <p class="preset-note" id="preset-note">Loading the full IANA list…</p>
 
+  <div class="mode-switch" role="group" aria-label="Check mode">
+    <button type="button" class="mode is-on" id="mode-bulk" data-mode="bulk" aria-pressed="true">Bulk names</button>
+    <button type="button" class="mode" id="mode-manual" data-mode="manual" aria-pressed="false">Manual domains</button>
+    <span class="mode-note" id="mode-note">Each name is checked on every extension in the TLD box.</span>
+  </div>
+
   <div class="editors">
-    <label class="field">
-      <div class="label-row"><strong>Names</strong><span id="name-count">0 names</span></div>
+    <label class="field" id="field-names">
+      <div class="label-row"><strong id="names-label">Names</strong><span id="name-count">0 names</span></div>
       <textarea id="names" spellcheck="false" autocomplete="off" placeholder="One name per line"></textarea>
-      <div class="hint">Second-level labels, like <code>brandname</code>. Full domains (<code>brand.com</code>), URLs, uppercase, and extra spaces are normalized. International names are checked in punycode. Up to 20,000 names per run. About 100 names across every extension stays inside an hour. For thousands of names, use Launch or Countries. A list that would run for many hours asks you to keep the largest extensions first.</div>
+      <div class="hint" id="name-hint">Second-level labels, like <code>brandname</code>. Full domains (<code>brand.com</code>), URLs, uppercase, and extra spaces are normalized. International names are checked in punycode. Up to 20,000 names per run. About 100 names across every extension stays inside an hour. For thousands of names, use Launch or Countries. A list that would run for many hours asks you to keep the largest extensions first.</div>
     </label>
-    <label class="field">
+    <label class="field" id="field-tlds">
       <div class="label-row"><strong>TLDs</strong><span id="tld-count">0 TLDs</span></div>
       <textarea id="tlds" spellcheck="false" autocomplete="off" placeholder="Loading the default list…"></textarea>
       <div class="hint" id="coverage-hint">Loading the IANA RDAP directory…</div>
@@ -307,6 +320,9 @@ const CACHE_KEY = "tld-checker-cache-v2";
 const NAMES_KEY = "tld-checker-names";
 const TLDS_KEY = "tld-checker-tlds-v2";
 const PRESET_KEY = "tld-checker-preset";
+const MODE_KEY = "tld-checker-mode";
+const BULK_HINT = "Second-level labels, like <code>brandname</code>. Full domains (<code>brand.com</code>), URLs, uppercase, and extra spaces are normalized. International names are checked in punycode. Up to 20,000 names per run. About 100 names across every extension stays inside an hour. For thousands of names, use Launch or Countries. A list that would run for many hours asks you to keep the largest extensions first.";
+const MANUAL_HINT = "One domain per line, like <code>si.si</code>, <code>me.io</code>, or <code>alpha.dev</code>. Only the extension written on that line is checked. A whole list of domains is fine. The TLD box is not used.";
 const CHIP_CAP = 12;
 const CHECK_CHUNK = 400;
 const PRESET_COPY = {
@@ -353,6 +369,8 @@ const state = {
   page: 0,
   showAll: false,
   mode: "scan",
+  listMode: "bulk",
+  manual: false,
   elapsedMs: 0,
   segmentStart: 0,
 };
@@ -423,8 +441,16 @@ function renderCoverage() {
   const hint = document.getElementById("coverage-hint");
   const tlds = splitDraft(tldsEl.value);
   document.getElementById("tld-count").textContent = tlds.length + (tlds.length === 1 ? " TLD" : " TLDs");
-  const names = namesEl.value.split(/\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith("#"));
-  document.getElementById("name-count").textContent = names.length + (names.length === 1 ? " line" : " lines");
+  const names = state.listMode === "manual"
+    ? namesEl.value.split(/[\s,;]+/).map((item) => item.trim()).filter((item) => item && !item.startsWith("#"))
+    : namesEl.value.split(/\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith("#"));
+  const nameWord = state.listMode === "manual" ? (names.length === 1 ? " domain" : " domains") : (names.length === 1 ? " line" : " lines");
+  document.getElementById("name-count").textContent = names.length + nameWord;
+  if (state.listMode === "manual") {
+    document.getElementById("tld-count").textContent = "Not used";
+    hint.textContent = "Manual check ignores this list. Each domain is checked only on the extension typed with it.";
+    return;
+  }
   if (state.suffixes.size === 0 && !state.bootstrapError) {
     hint.textContent = "Loading the IANA RDAP directory…";
     return;
@@ -575,12 +601,27 @@ async function loadDirectory() {
   renderCoverage();
 }
 
+function tldsFor(name) {
+  return name.tlds && name.tlds.length ? name.tlds : state.tlds;
+}
+
+function labelFor(name) {
+  return name.checkName || name.ascii;
+}
+
+function rowForResult(result) {
+  if (result.row) return result.row;
+  const match = state.names.find((name) => labelFor(name) === result.name && tldsFor(name).some((tld) => tld.ascii === result.tld));
+  return match ? match.ascii : result.name;
+}
+
 function metrics(name) {
+  const tlds = tldsFor(name);
   const memo = metricMemo.get(name.ascii);
-  if (memo && memo.total === state.tlds.length) return memo;
-  const counts = { registered: 0, available: 0, unknown: 0, done: 0, rdapAvailable: 0, total: state.tlds.length };
-  state.tlds.forEach((tld) => {
-    const hit = state.results.get(cacheKey(name.ascii, tld.ascii));
+  if (memo && memo.total === tlds.length) return memo;
+  const counts = { registered: 0, available: 0, unknown: 0, done: 0, rdapAvailable: 0, total: tlds.length };
+  tlds.forEach((tld) => {
+    const hit = state.results.get(cacheKey(labelFor(name), tld.ascii));
     if (!hit) return;
     counts.done += 1;
     if (hit.status === "registered") counts.registered += 1;
@@ -595,7 +636,7 @@ function metrics(name) {
 
 function bumpMetric(ascii, hit) {
   const counts = metricMemo.get(ascii);
-  if (!counts || counts.total !== state.tlds.length) return;
+  if (!counts) return;
   counts.done += 1;
   if (hit.status === "registered") counts.registered += 1;
   else if (hit.status === "available") {
@@ -709,8 +750,8 @@ function statusPanel(name, status) {
 }
 
 function resultList(name, status) {
-  return state.tlds
-    .map((tld) => state.results.get(cacheKey(name.ascii, tld.ascii)))
+  return tldsFor(name)
+    .map((tld) => state.results.get(cacheKey(labelFor(name), tld.ascii)))
     .filter((hit) => hit && hit.status === status);
 }
 
@@ -731,7 +772,7 @@ function renderTable() {
   document.querySelectorAll("thead button").forEach((button) => {
     const active = button.dataset.sort === state.sortKey;
     button.setAttribute("aria-sort", active ? (state.sortDir === "asc" ? "ascending" : "descending") : "none");
-    const label = button.dataset.sort === "name" ? "Name" : button.dataset.sort[0].toUpperCase() + button.dataset.sort.slice(1);
+    const label = button.dataset.sort === "name" ? (state.manual ? "Domain" : "Name") : button.dataset.sort[0].toUpperCase() + button.dataset.sort.slice(1);
     button.textContent = label + (active ? (state.sortDir === "asc" ? " ↑" : " ↓") : "");
   });
   const tbody = document.getElementById("tbody");
@@ -790,8 +831,8 @@ function renderTable() {
     const head = el("tr");
     ["TLD", "Result", "Method", "Confidence", "What the lookup means"].forEach((label) => head.append(el("th", null, label)));
     inner.append(head);
-    state.tlds.forEach((tld) => {
-      const hit = state.results.get(cacheKey(name.ascii, tld.ascii));
+    tldsFor(name).forEach((tld) => {
+      const hit = state.results.get(cacheKey(labelFor(name), tld.ascii));
       const row = el("tr");
       row.append(el("td", null, tld.display));
       if (!hit) {
@@ -962,8 +1003,9 @@ function renderProgress() {
     return;
   }
   card.hidden = false;
-  const namesDone = state.names.filter((name) => metrics(name).done === state.tlds.length).length;
+  const namesDone = state.names.filter((name) => metrics(name).done === tldsFor(name).length).length;
   const totalNames = state.names.length;
+  const nameWord = state.manual ? " domains" : " names";
   const label = document.getElementById("progress-label");
   const detail = document.getElementById("progress-detail");
   paintElapsed();
@@ -992,7 +1034,7 @@ function renderProgress() {
   }
   const pct = state.lookupsTotal ? Math.round((state.lookupsDone / state.lookupsTotal) * 100) : 0;
   document.getElementById("progress-bar").style.width = pct + "%";
-  label.textContent = namesDone + " / " + totalNames + " names";
+  label.textContent = namesDone + " / " + totalNames + nameWord;
   if (!state.running && state.lookupsDone >= state.lookupsTotal) {
     etaEl.textContent = "";
     detail.textContent = state.lookupsTotal ? "Finished " + state.lookupsDone.toLocaleString() + " lookups" : "Nothing to look up";
@@ -1104,9 +1146,9 @@ function applyResult(result, fromCache) {
   }
   if (isNew) {
     state.lookupsDone += 1;
-    bumpMetric(result.name, result);
+    bumpMetric(rowForResult(result), result);
   }
-  const pending = state.names.find((name) => metrics(name).done < state.tlds.length);
+  const pending = state.names.find((name) => metrics(name).done < tldsFor(name).length);
   state.currentName = pending ? pending.display : "";
   scheduleRender();
 }
@@ -1114,8 +1156,8 @@ function applyResult(result, fromCache) {
 function countFinished() {
   let done = 0;
   state.names.forEach((name) => {
-    state.tlds.forEach((tld) => {
-      if (state.results.has(cacheKey(name.ascii, tld.ascii))) done += 1;
+    tldsFor(name).forEach((tld) => {
+      if (state.results.has(cacheKey(labelFor(name), tld.ascii))) done += 1;
     });
   });
   return done;
@@ -1143,13 +1185,13 @@ async function runCheck(mode) {
   document.getElementById("check").textContent = "Preparing…";
   let parsed;
   if (state.hosted && window.TldBrowser) {
-    parsed = TldBrowser.parse(namesEl.value, tldsEl.value);
+    parsed = state.listMode === "manual" ? TldBrowser.parseDomains(namesEl.value) : TldBrowser.parse(namesEl.value, tldsEl.value);
   } else {
     try {
       const response = await fetch("/api/parse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ names: namesEl.value, tlds: tldsEl.value }),
+        body: JSON.stringify({ names: namesEl.value, tlds: tldsEl.value, manual: state.listMode === "manual" }),
         signal: state.controller.signal,
       });
       parsed = await response.json();
@@ -1172,9 +1214,10 @@ async function runCheck(mode) {
     return;
   }
   state.names = parsed.names || [];
-  state.tlds = parsed.tlds || [];
-  const planned = state.names.length * state.tlds.length;
-  if (planned > HOUR_LOOKUPS) {
+  state.manual = state.listMode === "manual" || !!parsed.manual;
+  state.tlds = state.manual ? [] : (parsed.tlds || []);
+  const planned = state.names.reduce((sum, name) => sum + tldsFor(name).length, 0);
+  if (!state.manual && planned > HOUR_LOOKUPS) {
     const keep = Math.max(12, Math.floor(HOUR_LOOKUPS / Math.max(state.names.length, 1)));
     showFitBanner(state.names.length, state.tlds.length, planned, Math.min(keep, state.tlds.length));
     state.controller = null;
@@ -1198,15 +1241,16 @@ async function runCheck(mode) {
     state.elapsedMs = 0;
     state.segmentStart = 0;
   }
-  state.lookupsTotal = state.names.length * state.tlds.length;
+  state.lookupsTotal = state.names.reduce((sum, name) => sum + tldsFor(name).length, 0);
   state.lookupsDone = 0;
   const lanes = state.names.map((name) => {
     const pairs = [];
-    state.tlds.forEach((tld) => {
-      const key = cacheKey(name.ascii, tld.ascii);
+    const label = labelFor(name);
+    tldsFor(name).forEach((tld) => {
+      const key = cacheKey(label, tld.ascii);
       const hit = cache[key];
       if (hit && hit.status) state.results.set(key, hit);
-      else pairs.push({ name: name.ascii, display: name.display, tld: tld.ascii, tldDisplay: tld.display });
+      else pairs.push({ name: label, display: name.display, tld: tld.ascii, tldDisplay: tld.display, row: name.ascii });
     });
     return pairs;
   });
@@ -1220,7 +1264,7 @@ async function runCheck(mode) {
   state.etaRough = true;
   state.etaMs = needed.length ? seedEta(needed.length) : null;
   state.running = needed.length > 0;
-  const pending = state.names.find((name) => metrics(name).done < state.tlds.length);
+  const pending = state.names.find((name) => metrics(name).done < tldsFor(name).length);
   state.currentName = pending ? pending.display : "";
   render();
   if (!needed.length) {
@@ -1319,7 +1363,7 @@ function presetTokens(id) {
 }
 
 function lookupStatus(name, tld) {
-  const hit = state.results.get(cacheKey(name.ascii, tld));
+  const hit = state.results.get(cacheKey(labelFor(name), tld));
   if (!hit) return "Not checked";
   if (hit.status === "registered") return "Taken";
   if (hit.status === "available") return "Free";
@@ -1466,9 +1510,12 @@ document.getElementById("stop").addEventListener("click", () => {
   if (state.controller) state.controller.abort();
 });
 document.getElementById("example").addEventListener("click", () => {
-  namesEl.value = "example\ngoogle\nmyapp\nbrandname\n";
+  namesEl.value = state.listMode === "manual" ? "si.si\nme.io\nalpha.dev\nexample.com\n" : "example\ngoogle\nmyapp\nbrandname\n";
   scheduleDraft();
   renderCoverage();
+});
+document.querySelectorAll(".mode").forEach((button) => {
+  button.addEventListener("click", () => setMode(button.dataset.mode));
 });
 document.querySelectorAll(".preset").forEach((button) => {
   button.addEventListener("click", () => applyPreset(button.dataset.preset));
@@ -1522,11 +1569,29 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
+function setMode(mode) {
+  state.listMode = mode === "manual" ? "manual" : "bulk";
+  sessionStorage.setItem(MODE_KEY, state.listMode);
+  const manual = state.listMode === "manual";
+  document.getElementById("mode-bulk").classList.toggle("is-on", !manual);
+  document.getElementById("mode-manual").classList.toggle("is-on", manual);
+  document.getElementById("mode-bulk").setAttribute("aria-pressed", manual ? "false" : "true");
+  document.getElementById("mode-manual").setAttribute("aria-pressed", manual ? "true" : "false");
+  document.querySelector(".editors").classList.toggle("manual", manual);
+  document.getElementById("names-label").textContent = manual ? "Domains" : "Names";
+  namesEl.placeholder = manual ? "One domain per line" : "One name per line";
+  document.getElementById("name-hint").innerHTML = manual ? MANUAL_HINT : BULK_HINT;
+  document.getElementById("mode-note").textContent = manual
+    ? "Each line is one domain. si.si is not also checked as si.com."
+    : "Each name is checked on every extension in the TLD box.";
+  renderCoverage();
+}
+
 const savedNames = sessionStorage.getItem(NAMES_KEY);
 const savedTlds = sessionStorage.getItem(TLDS_KEY);
 if (savedNames != null) namesEl.value = savedNames;
 if (savedTlds != null) tldsEl.value = savedTlds;
-renderCoverage();
+setMode(sessionStorage.getItem(MODE_KEY) || "bulk");
 loadDirectory();
 </script>
 </body>
