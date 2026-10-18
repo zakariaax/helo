@@ -12,5 +12,5 @@ run_worker_first = true
 [[d1_databases]]
 binding = "DB"
 database_name = "helo"
-database_id = "00000000-0000-0000-0000-000000000001"
+database_id = "aef774a2-c70f-42e5-84ef-d20a7e693891"
 migrations_dir = "migrations"

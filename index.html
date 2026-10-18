@@ -3,212 +3,345 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <title>Bulk TLD checker</title>
+<script>
+  (function () {
+    function resolve() {
+      var stored = null;
+      try { stored = localStorage.getItem("helo-mode"); } catch (error) {}
+      var dark = stored === "dark" || (stored !== "light" && window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches);
+      return dark ? "dark" : "light";
+    }
+    window.heloPaintMode = function (forced) {
+      var mode = forced || resolve();
+      document.documentElement.setAttribute("data-theme", mode);
+      var use = document.querySelector("#mode-toggle use");
+      if (use) use.setAttribute("href", mode === "dark" ? "#ci-sun" : "#ci-moon");
+    };
+    window.heloPaintMode();
+    window.addEventListener("storage", function (event) { if (event.key === "helo-mode") window.heloPaintMode(); });
+    window.addEventListener("message", function (event) {
+      if (event.origin === location.origin && event.data && event.data.type === "helo-mode") window.heloPaintMode(event.data.mode);
+    });
+    if (window.matchMedia) {
+      var query = matchMedia("(prefers-color-scheme: dark)");
+      if (query.addEventListener) query.addEventListener("change", function () { window.heloPaintMode(); });
+    }
+  })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700;800&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #efeae2;
-    --card: #fffdf8;
-    --ink: #1e1a16;
-    --muted: #5f574e;
-    --line: #e4d9cb;
-    --green: #0e6a3b;
-    --green-soft: #e4f5ea;
-    --red: #9c3418;
-    --red-soft: #fbe8e2;
-    --amber: #8a5a0d;
-    --amber-soft: #f8efd4;
-    --accent: #1b4f3a;
-    --accent-ink: #f4faf6;
-    --pending: #ddd6cb;
-    --shadow: 0 12px 32px rgba(62, 42, 18, 0.06);
+    --primary: #00a76f;
+    --primary-ink: #ffffff;
+    --primary-dark: color-mix(in srgb, var(--primary) 72%, #000);
+    --primary-light: color-mix(in srgb, var(--primary) 62%, #fff);
+    --primary-8: color-mix(in srgb, var(--primary) 8%, transparent);
+    --primary-16: color-mix(in srgb, var(--primary) 16%, transparent);
+    --primary-24: color-mix(in srgb, var(--primary) 24%, transparent);
+    --nav-on: var(--primary);
+
+    --bg: #ffffff;
+    --paper: #ffffff;
+    --neutral: #f4f6f8;
+    --text: #1c252e;
+    --text-2: #637381;
+    --text-3: #919eab;
+    --divider: rgba(145, 158, 171, 0.2);
+    --input-line: rgba(145, 158, 171, 0.32);
+    --hover: rgba(145, 158, 171, 0.08);
+    --header: rgba(255, 255, 255, 0.8);
+    --shadow-card: 0 0 2px 0 rgba(145, 158, 171, 0.2), 0 12px 24px -4px rgba(145, 158, 171, 0.12);
+    --shadow-pop: 0 0 2px 0 rgba(145, 158, 171, 0.24), -20px 20px 40px -4px rgba(145, 158, 171, 0.24);
+    --inherit-bg: #1c252e;
+    --inherit-ink: #ffffff;
+
+    --success: #22c55e; --success-ink: #118d57;
+    --warning: #ffab00; --warning-ink: #b76e00;
+    --error: #ff5630;   --error-ink: #b71d18;
+    --info: #00b8d9;    --info-ink: #006c9c;
+
+    /* Names the checker script and older chrome expect */
+    --green: var(--success-ink);
+    --red: var(--error-ink);
+    --amber: var(--warning-ink);
+    --green-soft: color-mix(in srgb, var(--success) 16%, transparent);
+    --red-soft: color-mix(in srgb, var(--error) 16%, transparent);
+    --amber-soft: color-mix(in srgb, var(--warning) 16%, transparent);
+    --accent: var(--primary);
+    --accent-ink: var(--primary-ink);
+    --card: var(--paper);
+    --ink: var(--text);
+    --muted: var(--text-2);
+    --line: var(--divider);
+    --pending: rgba(145, 158, 171, 0.24);
+
+    --radius: 16px;
+    --font-size: 15px;
+    --font: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
     color-scheme: light;
   }
+  :root[data-theme="dark"] {
+    --nav-on: var(--primary-light);
+    --bg: #141a21;
+    --paper: #1c252e;
+    --neutral: #28323d;
+    --text: #ffffff;
+    --text-2: #919eab;
+    --text-3: #637381;
+    --input-line: rgba(145, 158, 171, 0.24);
+    --header: rgba(20, 26, 33, 0.8);
+    --shadow-card: 0 0 2px 0 rgba(0, 0, 0, 0.2), 0 12px 24px -4px rgba(0, 0, 0, 0.12);
+    --shadow-pop: 0 0 2px 0 rgba(0, 0, 0, 0.24), -20px 20px 40px -4px rgba(0, 0, 0, 0.24);
+    --inherit-bg: #ffffff;
+    --inherit-ink: #1c252e;
+    --success-ink: #77ed8b;
+    --warning-ink: #ffd666;
+    --error-ink: #ffac82;
+    --info-ink: #61f3f3;
+    color-scheme: dark;
+  }
   * { box-sizing: border-box; }
+  html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
   body {
     margin: 0;
     min-height: 100vh;
-    background:
-      radial-gradient(1200px 400px at 10% -10%, #e7f2ea 0%, transparent 55%),
-      var(--bg);
-    color: var(--ink);
-    font: 16px/1.45 "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font: 400 var(--font-size)/1.5 var(--font);
+    transition: background-color .2s ease, color .2s ease;
   }
   button, input, select, textarea { font: inherit; color: inherit; }
   button { cursor: pointer; }
-  h1, h2, h3 { font-family: Palatino, "Palatino Linotype", "Iowan Old Style", Georgia, serif; font-weight: 600; letter-spacing: -0.02em; }
-  .wrap { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 32px 0 64px; }
-  header.top { display: flex; justify-content: space-between; gap: 24px; align-items: flex-end; margin-bottom: 22px; }
+  h1, h2, h3 { font-family: var(--font); font-weight: 700; letter-spacing: 0; }
+  svg.i { width: 22px; height: 22px; flex: none; }
+  .wrap { width: min(1200px, calc(100% - 80px)); margin: 0 auto; padding: 32px 0 64px; }
+  header.top { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; margin-bottom: 24px; }
   .mark {
-    width: 42px; height: 42px; border-radius: 12px; background: var(--accent); color: var(--accent-ink);
-    display: grid; place-items: center; font-weight: 700; letter-spacing: 0.04em; font-size: 12px;
+    width: 48px; height: 48px; border-radius: 12px; color: var(--primary-ink);
+    background: linear-gradient(135deg, var(--primary-light), var(--primary-dark)); box-shadow: 0 8px 16px 0 var(--primary-24);
+    display: grid; place-items: center; font-weight: 800; letter-spacing: 0.04em; font-size: 12px; flex: none;
   }
-  .brand { display: flex; gap: 12px; align-items: center; }
-  h1 { margin: 0; font-size: 34px; line-height: 1.05; }
-  .lede { margin: 6px 0 0; color: var(--muted); max-width: 62ch; }
+  .brand { display: flex; gap: 14px; align-items: center; }
+  h1 { margin: 0; font-size: 24px; line-height: 1.5; }
+  .lede { margin: 8px 0 0; color: var(--text-2); max-width: 70ch; }
+  .icon-btn { width: 40px; height: 40px; border-radius: 50%; border: 0; background: transparent; color: var(--text-2); display: inline-grid; place-items: center; transition: background-color .2s, transform .2s; flex: none; }
+  .icon-btn:hover { background: var(--hover); transform: scale(1.04); }
   .recommend {
-    background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px;
-    box-shadow: var(--shadow); margin-bottom: 16px;
+    position: relative; overflow: hidden;
+    background: linear-gradient(135deg, var(--primary-16), var(--primary-8)), var(--paper);
+    border-radius: var(--radius); padding: 20px 24px; margin-bottom: 24px;
   }
-  .recommend strong { color: var(--accent); }
-  .methods { display: grid; grid-template-columns: 1.15fr 1fr 1fr; gap: 12px; margin: 18px 0 16px; }
+  .recommend strong { color: var(--nav-on); }
+  .methods { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin: 40px 0 16px; }
   .card {
-    background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px 16px;
-    box-shadow: var(--shadow);
+    background: var(--paper); border-radius: var(--radius); padding: 24px;
+    box-shadow: var(--shadow-card); transition: background-color .2s;
   }
-  .card.best { border-color: #b7d7c4; background: linear-gradient(180deg, #f5fbf7, var(--card) 48px); }
-  .card h2 { margin: 0 0 8px; font-size: 22px; }
-  .card p, .recommend p { margin: 0; color: var(--muted); }
+  .card.best { box-shadow: var(--shadow-card), inset 0 3px 0 var(--primary); }
+  .card.best h2 { color: var(--nav-on); }
+  .card h2 { margin: 0 0 8px; font-size: 18px; }
+  .card p, .recommend p { margin: 0; color: var(--text-2); font-size: 14px; line-height: 1.6; }
   .card p + p { margin-top: 8px; }
-  .presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 0 0 8px; }
+  .presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 0 0 8px; }
   .preset {
-    text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 16px;
-    padding: 12px 14px 14px; box-shadow: var(--shadow);
+    text-align: left; background: var(--paper); border: 1px solid transparent; border-radius: var(--radius);
+    padding: 20px 20px 18px; box-shadow: var(--shadow-card); transition: box-shadow .2s, border-color .2s, transform .2s;
   }
-  .preset.is-on { border-color: var(--accent); background: #f3faf6; box-shadow: inset 0 0 0 1px var(--accent); }
-  .preset .count { display: block; font-family: Palatino, "Palatino Linotype", Georgia, serif; font-size: 26px; line-height: 1; letter-spacing: -0.03em; }
-  .preset strong { display: block; margin-top: 6px; }
-  .preset small { display: block; margin-top: 4px; color: var(--muted); font-size: 13px; line-height: 1.35; }
-  .preset-note { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
-  .mode-switch { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; }
+  .preset:hover { transform: translateY(-2px); }
+  .preset.is-on { border-color: var(--primary); box-shadow: var(--shadow-card), 0 0 0 1px var(--primary); background: linear-gradient(180deg, var(--primary-8), transparent 70%), var(--paper); }
+  .preset .count { display: block; font-size: 30px; font-weight: 700; line-height: 1.2; }
+  .preset.is-on .count { color: var(--nav-on); }
+  .preset strong { display: block; margin-top: 6px; font-size: 14px; font-weight: 600; }
+  .preset small { display: block; margin-top: 4px; color: var(--text-2); font-size: 13px; line-height: 1.45; }
+  .preset-note { margin: 8px 0 24px; color: var(--text-3); font-size: 13px; }
+  .mode-switch { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 0 0 16px; }
+  .mode-switch .mode:first-child { margin-left: 0; }
   .mode {
-    border-radius: 999px; padding: 8px 14px; border: 1px solid var(--line); background: transparent;
+    border-radius: 8px; padding: 6px 14px; min-height: 36px; border: 0; background: transparent; color: var(--text-2); font-weight: 600; font-size: 14px;
+    transition: background-color .15s, color .15s;
   }
-  .mode.is-on { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 700; }
-  .mode-note { color: var(--muted); font-size: 13px; }
-  .editors { display: grid; grid-template-columns: 1.4fr 0.8fr; gap: 12px; margin-bottom: 12px; }
-  .editors.manual #field-tlds { opacity: 0.55; }
+  .mode:hover { background: var(--hover); }
+  .mode.is-on { background: var(--inherit-bg); color: var(--inherit-ink); font-weight: 700; }
+  .mode-note { color: var(--text-3); font-size: 13px; }
+  .editors { display: grid; grid-template-columns: 1.4fr 0.8fr; gap: 24px; margin-bottom: 16px; }
+  .editors.manual #field-tlds { opacity: 0.5; }
   label.field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-  .label-row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
-  .label-row span { color: var(--muted); font-size: 13px; }
+  .label-row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; font-size: 14px; }
+  .label-row span { color: var(--text-3); font-size: 13px; }
   textarea {
-    width: 100%; min-height: 280px; resize: vertical; padding: 12px 14px; border-radius: 14px;
-    border: 1px solid var(--line); background: var(--card); line-height: 1.45;
+    width: 100%; min-height: 280px; resize: vertical; padding: 16px 14px; border-radius: 8px;
+    border: 1px solid var(--input-line); background: transparent; line-height: 1.5; font-size: 14px; outline: none;
+    transition: border-color .15s, box-shadow .15s;
   }
-  textarea:focus, input:focus, select:focus { outline: 2px solid #9dccb2; border-color: #7eae96; }
-  .hint { color: var(--muted); font-size: 13px; min-height: 2.6em; }
-  .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 4px 0 14px; }
+  textarea:hover, input:hover, select:hover { border-color: var(--text); }
+  textarea:focus, input:focus, select:focus { outline: none; border-color: var(--text); box-shadow: inset 0 0 0 1px var(--text); }
+  textarea::placeholder, input::placeholder { color: var(--text-3); }
+  .hint { color: var(--text-3); font-size: 12px; min-height: 2.6em; line-height: 1.6; }
+  .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 4px 0 24px; }
   .primary, .ghost, .danger {
-    border-radius: 999px; padding: 10px 16px; border: 1px solid transparent;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    border-radius: 8px; min-height: 36px; padding: 6px 16px; border: 1px solid transparent; font-weight: 700; font-size: 14px;
+    transition: background-color .2s, box-shadow .2s, border-color .2s;
   }
-  .primary { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
-  .primary:disabled { opacity: 0.55; cursor: wait; }
-  .ghost { background: transparent; border-color: var(--line); }
-  .ghost:hover, .danger:hover { background: #fff; }
-  .danger { background: transparent; border-color: #e7c2b8; color: var(--red); }
-  .progress-card { padding: 14px 16px; margin-bottom: 12px; }
+  .primary { background: var(--primary); color: var(--primary-ink); }
+  .primary:hover { background: var(--primary-dark); box-shadow: 0 8px 16px 0 var(--primary-24); }
+  #check { min-height: 48px; padding: 8px 28px; font-size: 15px; }
+  .primary:disabled { opacity: 0.5; cursor: wait; box-shadow: none; }
+  .ghost { background: transparent; border-color: var(--input-line); }
+  .ghost:hover { border-color: currentColor; background: var(--hover); }
+  .danger { background: color-mix(in srgb, var(--error) 16%, transparent); color: var(--error-ink); }
+  .danger:hover { background: color-mix(in srgb, var(--error) 28%, transparent); }
+  .progress-card { padding: 20px 24px; margin-bottom: 24px; }
   .progress-top { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: baseline; }
-  .progress-top strong { font-size: 18px; }
-  #progress-eta, #progress-elapsed { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .progress-top strong { font-size: 16px; }
+  #progress-eta, #progress-elapsed { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-2); font-size: 14px; }
   #progress-elapsed { text-align: center; }
   #progress-eta { text-align: right; }
   @media (max-width: 720px) {
     .progress-top { grid-template-columns: 1fr; gap: 4px; }
     #progress-elapsed, #progress-eta { text-align: left; }
   }
-  .progress-sub { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
-  .bar { height: 8px; background: #ebe4da; border-radius: 99px; overflow: hidden; margin-top: 10px; }
-  .bar span { display: block; height: 100%; width: 0; background: var(--accent); border-radius: inherit; }
-  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .progress-sub { margin: 10px 0 0; color: var(--text-3); font-size: 13px; }
+  .bar { height: 6px; background: var(--primary-24); border-radius: 99px; overflow: hidden; margin-top: 12px; }
+  .bar span { display: block; height: 100%; width: 0; background: var(--primary); border-radius: inherit; transition: width .3s ease; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 16px; }
   .toolbar input, .toolbar select {
-    background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px;
+    background: transparent; border: 1px solid var(--input-line); border-radius: 8px; padding: 9px 14px; font-size: 14px; min-height: 40px;
   }
-  .toolbar input { min-width: min(280px, 100%); }
+  .toolbar select { background: var(--paper); }
+  .toolbar input[type="search"] { min-width: min(280px, 100%); }
   .target-field {
-    display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700; color: var(--muted);
+    display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--text-2);
   }
-  .target-field input { width: 4.8rem; min-width: 4.8rem; text-align: center; font-weight: 700; color: var(--ink); }
-  .stats { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
-  .pill { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; font-size: 14px; }
-  .pill b { font-variant-numeric: tabular-nums; }
-  .taken-ink { color: var(--red); }
-  .free-ink { color: var(--green); }
-  .unk-ink { color: var(--amber); }
+  .target-field input { width: 5rem; min-width: 5rem; text-align: center; font-weight: 700; color: var(--text); }
+  .stats { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .pill { background: var(--neutral); border: 0; border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 500; color: var(--text-2); }
+  .pill b { font-variant-numeric: tabular-nums; color: var(--text); }
+  .taken-ink { color: var(--error-ink) !important; }
+  .free-ink { color: var(--success-ink) !important; }
+  .unk-ink { color: var(--warning-ink) !important; }
   .banner {
-    border-radius: 14px; padding: 12px 14px; margin-bottom: 12px; background: #fff6e8; border: 1px solid #efd7a8; color: #6d4d12;
+    border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; font-size: 14px;
+    background: color-mix(in srgb, var(--warning) 16%, transparent); border: 0; color: var(--warning-ink);
   }
-  .banner.bad { background: var(--red-soft); border-color: #f0c7bc; color: var(--red); }
+  .banner.bad { background: color-mix(in srgb, var(--error) 16%, transparent); color: var(--error-ink); }
   .table-card { padding: 0; overflow: auto; }
+  .select-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; }
+  .select-bar .count-note { color: var(--text-2); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .select-bar .flash { color: var(--success-ink); font-size: 13px; font-weight: 600; }
+  .select-bar .primary:disabled, .select-bar .ghost:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; background-clip: padding-box; }
+  th.sel, td.sel { width: 1%; padding-right: 0; vertical-align: top; user-select: none; -webkit-user-select: none; }
+  td.sel { padding-top: 18px; }
+  .sel input { width: 18px; height: 18px; margin: 0; cursor: pointer; accent-color: var(--primary); }
+  tr.is-selected > td { background: var(--primary-8); }
   table { width: 100%; border-collapse: collapse; min-width: 980px; }
-  tr.opportunity td { background: #f3faf6; }
-  tr.opportunity td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+  tbody tr { transition: background-color .15s; }
+  tbody tr:hover > td { background: var(--hover); }
+  tr.opportunity td { background: var(--primary-8); }
+  tr.opportunity td:first-child { box-shadow: inset 3px 0 0 var(--primary); }
   .name-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   .pick {
-    display: inline-flex; align-items: center; border-radius: 999px; background: var(--accent); color: var(--accent-ink);
-    font-size: 11px; font-weight: 800; letter-spacing: 0.04em; padding: 2px 7px;
+    display: inline-flex; align-items: center; height: 22px; border-radius: 6px; background: var(--primary-16); color: var(--nav-on);
+    font-size: 11px; font-weight: 700; letter-spacing: 0.02em; padding: 0 7px;
   }
-  .score-break { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; font-weight: 600; white-space: normal; max-width: 9.5rem; }
-  th, td { text-align: left; vertical-align: top; padding: 12px 12px; border-bottom: 1px solid var(--line); }
-  th { position: sticky; top: 0; background: #fffdf8; z-index: 1; font-size: 13px; color: var(--muted); font-weight: 700; }
-  th button { background: none; border: 0; padding: 0; font-weight: 700; color: var(--muted); }
-  th button[aria-sort="descending"], th button[aria-sort="ascending"] { color: var(--ink); }
+  .score-break { display: block; margin-top: 2px; color: var(--text-3); font-size: 11px; font-weight: 600; white-space: normal; max-width: 9.5rem; }
+  th, td { text-align: left; vertical-align: top; padding: 16px; border-bottom: 1px dashed var(--divider); font-size: 14px; }
+  th:first-child, td:first-child { padding-left: 24px; }
+  th:last-child, td:last-child { padding-right: 24px; }
+  th { position: sticky; top: 0; background: var(--neutral); z-index: 1; font-size: 14px; color: var(--text-2); font-weight: 600; border-bottom: 0; }
+  th button { background: none; border: 0; padding: 0; font-weight: 600; color: var(--text-2); }
+  th button:hover { color: var(--text); }
+  th button[aria-sort="descending"], th button[aria-sort="ascending"] { color: var(--text); }
+  th button[aria-sort="descending"]::after { content: " ↓"; }
+  th button[aria-sort="ascending"]::after { content: " ↑"; }
   td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; width: 1%; }
   .count-btn {
-    background: none; border: 0; padding: 2px 6px; margin: -2px -6px; border-radius: 8px;
+    background: none; border: 0; padding: 2px 8px; margin: -2px -8px; border-radius: 6px;
     font: inherit; font-variant-numeric: tabular-nums; font-weight: 700; cursor: pointer;
   }
-  .count-btn:hover:not(:disabled) { text-decoration: underline; }
-  .count-btn[aria-pressed="true"] { background: #f3eee6; }
+  .count-btn:hover:not(:disabled) { background: var(--hover); }
+  .count-btn[aria-pressed="true"] { background: var(--neutral); }
   .count-btn:disabled { cursor: default; }
-  .name-btn { background: none; border: 0; padding: 0; font-weight: 700; text-align: left; }
-  .name-btn:hover { text-decoration: underline; }
-  .subascii { color: var(--muted); font-size: 12px; }
-  .mix { display: flex; width: 120px; height: 8px; border-radius: 99px; overflow: hidden; background: var(--pending); margin-top: 6px; }
+  .name-btn { background: none; border: 0; padding: 0; font-weight: 600; text-align: left; }
+  .name-btn:hover { color: var(--nav-on); text-decoration: underline; }
+  .subascii { color: var(--text-3); font-size: 12px; }
+  .mix { display: flex; width: 120px; height: 6px; border-radius: 99px; overflow: hidden; background: var(--pending); margin-top: 8px; }
   .mix i { display: block; height: 100%; }
-  .mix .reg { background: var(--red); }
-  .mix .avail { background: var(--green); }
-  .mix .unk { background: #e0b15a; }
-  .frac { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .mix .reg { background: var(--error); }
+  .mix .avail { background: var(--success); }
+  .mix .unk { background: var(--warning); }
+  .frac { color: var(--text-3); font-size: 12px; margin-top: 4px; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; max-width: 340px; }
   .chip {
-    display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 3px 8px;
-    font-size: 12.5px; font-weight: 700; line-height: 1.3;
+    display: inline-flex; align-items: center; gap: 6px; height: 24px; border-radius: 6px; padding: 0 8px;
+    font-size: 12px; font-weight: 700; line-height: 1;
   }
-  .chip small { font-size: 10px; letter-spacing: 0.04em; font-weight: 800; opacity: 0.7; }
-  .chip.registered { background: var(--red-soft); color: var(--red); }
-  .chip.available { background: var(--green-soft); color: var(--green); }
-  .chip.unknown { background: var(--amber-soft); color: var(--amber); }
-  tr.detail td { background: #fbf8f3; }
+  .chip small { font-size: 10px; letter-spacing: 0.04em; font-weight: 700; opacity: 0.72; }
+  .chip.registered { background: var(--red-soft); color: var(--error-ink); }
+  .chip.available { background: var(--green-soft); color: var(--success-ink); }
+  .chip.unknown { background: var(--amber-soft); color: var(--warning-ink); }
+  tr.detail td { background: var(--neutral); }
+  tr.detail:hover > td { background: var(--neutral); }
   .detail-table { width: 100%; min-width: 0; }
   .detail-table th { position: static; background: transparent; }
-  .status-word.registered { color: var(--red); }
-  .status-word.available { color: var(--green); }
-  .status-word.unknown { color: var(--amber); }
-  .empty { padding: 28px 18px; color: var(--muted); }
-  .more-chips { border: 0; background: transparent; color: var(--muted); font-size: 12px; font-weight: 700; padding: 3px 2px; }
-  .more-chips:hover { color: var(--ink); }
+  .detail-table td { border-bottom-color: var(--divider); }
+  .status-word.registered { color: var(--error-ink); font-weight: 600; }
+  .status-word.available { color: var(--success-ink); font-weight: 600; }
+  .status-word.unknown { color: var(--warning-ink); font-weight: 600; }
+  .empty { padding: 40px 24px; color: var(--text-3); text-align: center; font-size: 14px; line-height: 1.6; }
+  .more-chips { border: 0; background: transparent; color: var(--text-2); font-size: 12px; font-weight: 700; padding: 3px 4px; border-radius: 6px; }
+  .more-chips:hover { color: var(--text); background: var(--hover); }
   .detail-scroll { max-height: 420px; overflow: auto; }
-  .status-note { margin: 0 0 8px; color: var(--muted); font-size: 13px; }
+  .status-note { margin: 0 0 8px; color: var(--text-2); font-size: 13px; }
   .status-panel { max-height: 280px; overflow: auto; }
   .status-panel .chips { max-width: none; }
-  .legend { color: var(--muted); font-size: 13px; margin: 8px 2px 0; }
-  .pager { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 4px 0 12px; }
-  .table-card > .pager { padding: 12px; }
-  .pager-label { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .legend { color: var(--text-3); font-size: 13px; margin: 12px 2px 0; line-height: 1.6; }
+  .pager { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 4px 0 16px; }
+  .table-card > .pager { padding: 16px 24px; }
+  .pager-label { color: var(--text-2); font-size: 13px; font-variant-numeric: tabular-nums; }
   .banner .ghost, .banner .primary { margin-left: 8px; }
-  .footer-note { color: var(--muted); font-size: 13px; margin-top: 18px; }
-  code { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 0.92em; }
+  .footer-note { color: var(--text-3); font-size: 13px; margin-top: 24px; line-height: 1.6; }
+  code { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 0.9em; background: var(--neutral); padding: 1px 5px; border-radius: 4px; }
   @media (max-width: 980px) {
-    .methods, .editors, .presets, header.top { grid-template-columns: 1fr; display: grid; }
-    header.top { align-items: start; }
-    h1 { font-size: 28px; }
+    .methods, .editors, .presets { grid-template-columns: 1fr; }
+    h1 { font-size: 22px; }
   }
   @media (max-width: 720px) {
-    .presets { grid-template-columns: 1fr 1fr; }
+    .wrap { width: calc(100% - 32px); padding-top: 24px; }
+    .presets { grid-template-columns: 1fr 1fr; gap: 12px; }
   }
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="ci-sun" viewBox="0 0 24 24"><path fill="currentColor" d="M18 12a6 6 0 1 1-12 0a6 6 0 0 1 12 0"/><path fill="currentColor" opacity=".5" fill-rule="evenodd" d="M12 1.25a.75.75 0 0 1 .75.75v1a.75.75 0 0 1-1.5 0V2a.75.75 0 0 1 .75-.75M4.399 4.399a.75.75 0 0 1 1.06 0l.393.392a.75.75 0 0 1-1.06 1.061l-.393-.393a.75.75 0 0 1 0-1.06m15.202 0a.75.75 0 0 1 0 1.06l-.393.393a.75.75 0 0 1-1.06-1.06l.393-.393a.75.75 0 0 1 1.06 0M1.25 12a.75.75 0 0 1 .75-.75h1a.75.75 0 0 1 0 1.5H2a.75.75 0 0 1-.75-.75m19 0a.75.75 0 0 1 .75-.75h1a.75.75 0 0 1 0 1.5h-1a.75.75 0 0 1-.75-.75m-2.102 6.148a.75.75 0 0 1 1.06 0l.393.393a.75.75 0 1 1-1.06 1.06l-.393-.393a.75.75 0 0 1 0-1.06m-12.296 0a.75.75 0 0 1 0 1.06l-.393.393a.75.75 0 1 1-1.06-1.06l.392-.393a.75.75 0 0 1 1.061 0M12 20.25a.75.75 0 0 1 .75.75v1a.75.75 0 0 1-1.5 0v-1a.75.75 0 0 1 .75-.75" clip-rule="evenodd"/></symbol>
+    <symbol id="ci-moon" viewBox="0 0 24 24"><path fill="currentColor" d="M21.067 11.857a.75.75 0 0 0-1.272-.592A5.5 5.5 0 0 1 12.735 4.2a.75.75 0 0 0-.592-1.272A9.25 9.25 0 1 0 21.067 11.857"/><path fill="currentColor" opacity=".5" d="M17.5 2.5l.4 1.1l1.1.4l-1.1.4l-.4 1.1l-.4-1.1l-1.1-.4l1.1-.4zM20 7l.27.73L21 8l-.73.27L20 9l-.27-.73L19 8l.73-.27z"/></symbol>
+  </defs>
+</svg>
 <div class="wrap">
   <header class="top">
     <div>
       <div class="brand"><div class="mark">TLD</div><h1>Bulk TLD checker</h1></div>
       <p class="lede">Paste name ideas. For each one, see how many extensions are already registered, which are taken, and which look available.</p>
     </div>
+    <button class="icon-btn mode-toggle-standalone" id="mode-toggle" type="button" aria-label="Toggle dark mode" title="Toggle dark mode"><svg class="i"><use href="#ci-moon"/></svg></button>
   </header>
+  <script>
+    window.heloPaintMode();
+    document.getElementById("mode-toggle").addEventListener("click", function () {
+      var next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      try { localStorage.setItem("helo-mode", next); } catch (error) {}
+      window.heloPaintMode(next);
+    });
+  </script>
 
-  <section class="recommend">
-    <p><strong>Best free method: public RDAP.</strong> It is the registry’s own directory over HTTPS, with a clear found or not-found answer. DNS is the fallback when a TLD has no RDAP server, and also when that registry cannot be reached from the browser. Classic WHOIS is free but the wording is too inconsistent to trust for a bulk yes or no.</p>
-  </section>
 
   <div id="banner"></div>
 
@@ -291,6 +424,14 @@
   </div>
   <div class="stats" id="stats" hidden></div>
   <div id="skipped"></div>
+  <div class="select-bar" id="select-bar" hidden>
+    <button class="ghost" type="button" id="select-available">Select available</button>
+    <button class="ghost" type="button" id="copy-selected" disabled>Copy selected</button>
+    <button class="primary" type="button" id="deep-scan" disabled title="Check the selected names on every extension in the TLD box">Deep scan</button>
+    <button class="ghost" type="button" id="clear-selection" hidden>Clear selection</button>
+    <span class="count-note" id="select-count"></span>
+    <span class="flash" id="select-flash" role="status"></span>
+  </div>
   <div class="pager" id="pager-top" hidden></div>
 
   <section class="card table-card" id="table-card">
@@ -298,6 +439,7 @@
     <table id="results" hidden>
       <thead>
         <tr>
+          <th class="sel"><input type="checkbox" id="select-page" aria-label="Select every name on this page"></th>
           <th><button type="button" data-sort="name">Name</button></th>
           <th class="num"><button type="button" data-sort="score">Score</button></th>
           <th class="num"><button type="button" data-sort="registered">Registered</button></th>
@@ -312,23 +454,6 @@
     <div class="pager" id="pager-bottom" hidden></div>
   </section>
   <p class="legend" id="legend" hidden>The investor score counts only extensions that are already taken: .com 10, .ai 6, .io 4, .co 3, .app 3, .dev 2, .net 2, .org 2, .me 1, .xyz 1. A highlighted pick means the target extension is free while .com or .ai is taken. Red is taken, green looks available, amber is unknown. Click a count to list those extensions. A failed lookup stays unknown and is never called available. RDAP availability is high confidence. DNS availability is a hint.</p>
-  <section class="methods" aria-label="How the lookup methods compare">
-    <article class="card best">
-      <h2>RDAP</h2>
-      <p>IANA publishes which HTTPS server to ask for each TLD. HTTP 200 means the registry has the domain. HTTP 404 means it does not. That is the strongest free signal.</p>
-      <p>Owner contacts are often privacy-redacted. Redaction does not change the found / not-found answer. A not-found name can still be premium, reserved, or blocked at the moment you try to buy it.</p>
-    </article>
-    <article class="card">
-      <h2>DNS</h2>
-      <p>NXDOMAIN means the public DNS has no such name. That usually means unregistered, but a registered domain with no nameservers looks the same. Some TLDs answer for every name, so DNS says taken when it is not a normal registration.</p>
-      <p>This app uses DNS when IANA lists no RDAP server, and when the registry server does not answer the browser. Many registries block browser requests, which is why a full scan used to show a lot of unknowns. Those chips are labeled DNS. Availability from DNS is low confidence.</p>
-    </article>
-    <article class="card">
-      <h2>WHOIS</h2>
-      <p>Port 43 WHOIS needs no key, but every registry writes a different paragraph. “Available”, “not found”, and “no match” are not safe to parse, and bulk queries get cut off.</p>
-      <p>Privacy redaction hides contact data you do not need for this job. This app does not query WHOIS.</p>
-    </article>
-  </section>
   <p class="footer-note" id="footer-note">Nothing is uploaded to an account. A check asks IANA for the RDAP server list, then the registry for each RDAP TLD. If the registry cannot be reached, it asks Cloudflare or Google DNS-over-HTTPS and labels that as a DNS hint. Answers stay in this browser tab until you close it. Names are checked together, with a cap per registry so one slow server does not stall the rest.</p>
 </div>
 <script src="browser-check.js"></script>
@@ -353,6 +478,7 @@ const namesEl = document.getElementById("names");
 const tldsEl = document.getElementById("tlds");
 const bannerEl = document.getElementById("banner");
 const state = {
+  selected: new Set(),
   names: [],
   tlds: [],
   results: new Map(),
@@ -571,6 +697,7 @@ function markHosted() {
 async function loadDirectory() {
   let hosted = false;
   try {
+    if (window.HELO_APP) throw new Error("signed-in app has no checker server");
     const response = await fetch("/api/defaults");
     if (!response.ok) throw new Error("defaults");
     installPresetPayload(await response.json());
@@ -580,6 +707,7 @@ async function loadDirectory() {
       showBanner("The checker server is not responding. From this folder run python3 server.py and open http://127.0.0.1:8765.", true);
     } else {
       try {
+        if (window.HELO_APP && TldBrowser.setRdapProxy) TldBrowser.setRdapProxy("/api/rdap");
         installPresetPayload(await TldBrowser.loadDefaults());
         hosted = true;
         markHosted();
@@ -834,7 +962,7 @@ function statusPanel(name, status) {
   const hits = resultList(name, status);
   const detail = el("tr", "detail");
   const cell = el("td");
-  cell.colSpan = 7;
+  cell.colSpan = 8;
   const title = status === "registered" ? "Registered" : status === "available" ? "Available" : "Unknown";
   cell.append(el("p", "status-note", title + " · " + hits.length.toLocaleString() + ". " + STATUS_NOTES[status]));
   const scroll = el("div", "status-panel");
@@ -853,11 +981,119 @@ function resultList(name, status) {
     .filter((hit) => hit && hit.status === status);
 }
 
+/* ---------- Selection, copy, deep scan ---------- */
+function selectedNames() {
+  return state.names.filter((name) => state.selected.has(name.ascii));
+}
+
+/* Rows with at least one free extension. In manual mode that is every free domain. */
+function availableRows() {
+  return state.names.filter((name) => metrics(name).available > 0);
+}
+
+function availableDomains() {
+  const out = [];
+  state.names.forEach((name) => {
+    resultList(name, "available").forEach((hit) => {
+      out.push(state.manual ? name.display : (name.display + "." + (hit.tldDisplay || hit.tld)));
+    });
+  });
+  return [...new Set(out)];
+}
+
+function paintSelection(pageRows) {
+  const bar = document.getElementById("select-bar");
+  bar.hidden = !state.started;
+  const count = state.selected.size;
+  const freeRows = state.started ? availableRows() : [];
+  const allPicked = freeRows.length > 0 && freeRows.every((name) => state.selected.has(name.ascii));
+  const selectAvailable = document.getElementById("select-available");
+  selectAvailable.textContent = (allPicked ? "Available selected" : "Select available") + (freeRows.length ? " (" + freeRows.length.toLocaleString() + ")" : "");
+  selectAvailable.disabled = !freeRows.length || allPicked;
+  const copySelected = document.getElementById("copy-selected");
+  copySelected.textContent = "Copy selected" + (count ? " (" + count.toLocaleString() + ")" : "");
+  copySelected.disabled = !count;
+  const deep = document.getElementById("deep-scan");
+  deep.textContent = "Deep scan" + (count ? " (" + count.toLocaleString() + ")" : "");
+  deep.disabled = !count || !!state.running;
+  document.getElementById("clear-selection").hidden = !count;
+  document.getElementById("select-count").textContent = count ? count.toLocaleString() + " selected" : "Tick names to copy or deep scan them. Shift-click selects a range.";
+  const head = document.getElementById("select-page");
+  const rows = pageRows || [];
+  const onPage = rows.filter((name) => state.selected.has(name.ascii)).length;
+  head.checked = rows.length > 0 && onPage === rows.length;
+  head.indeterminate = onPage > 0 && onPage < rows.length;
+  head.disabled = !rows.length;
+  head._rows = rows;
+}
+
+let flashTimer = 0;
+function flash(text) {
+  const node = document.getElementById("select-flash");
+  node.textContent = text;
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { node.textContent = ""; }, 2600);
+}
+
+async function copyText(lines, label) {
+  const text = lines.join("\n");
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (error) {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.append(area);
+    area.select();
+    document.execCommand("copy");
+    area.remove();
+  }
+  flash("Copied " + lines.length.toLocaleString() + " " + label + ".");
+}
+
+function deepScan() {
+  const picked = selectedNames();
+  if (!picked.length || state.running) return;
+  /* A manual row like bafas.si becomes the name "bafas", checked on every extension in the TLD box. */
+  const labels = [...new Set(picked.map((name) => labelFor(name)))];
+  if (!tldsEl.value.trim()) applyPreset("famous");
+  setMode("bulk");
+  namesEl.value = labels.join("\n") + "\n";
+  sessionStorage.setItem(NAMES_KEY, namesEl.value);
+  sessionStorage.setItem(TLDS_KEY, tldsEl.value);
+  namesEl.dispatchEvent(new Event("input"));
+  state.selected = new Set();
+  renderCoverage();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  /* Click Check so the signed-in app's daily-limit guard runs as usual. */
+  document.getElementById("check").click();
+}
+
+document.getElementById("select-page").addEventListener("change", (event) => {
+  const rows = event.target._rows || [];
+  rows.forEach((name) => {
+    if (event.target.checked) state.selected.add(name.ascii);
+    else state.selected.delete(name.ascii);
+  });
+  renderTable();
+});
+document.getElementById("select-available").addEventListener("click", () => {
+  const rows = availableRows();
+  rows.forEach((name) => state.selected.add(name.ascii));
+  renderTable();
+  flash("Selected " + rows.length.toLocaleString() + (state.manual ? " available domains." : " names with a free extension."));
+});
+document.getElementById("copy-selected").addEventListener("click", () => copyText(selectedNames().map((name) => name.display), state.manual ? "domains" : "names"));
+document.getElementById("clear-selection").addEventListener("click", () => { state.selected = new Set(); renderTable(); });
+document.getElementById("deep-scan").addEventListener("click", deepScan);
+
 function renderTable() {
   const table = document.getElementById("results");
   const empty = document.getElementById("empty");
   const legend = document.getElementById("legend");
   if (!state.started) {
+    document.getElementById("select-bar").hidden = true;
     table.hidden = true;
     empty.hidden = false;
     legend.hidden = true;
@@ -878,10 +1114,11 @@ function renderTable() {
   const rows = visibleNames();
   renderPager(rows.length);
   const pageRows = state.showAll ? rows : rows.slice(state.page * PAGE_SIZE, (state.page + 1) * PAGE_SIZE);
+  paintSelection(pageRows);
   if (!rows.length) {
     const tr = el("tr");
     const td = el("td", null, "No names match this filter.");
-    td.colSpan = 7;
+    td.colSpan = 8;
     tr.append(td);
     tbody.append(tr);
     return;
@@ -889,7 +1126,37 @@ function renderTable() {
   pageRows.forEach((name) => {
     const counts = metrics(name);
     const pick = isOpportunity(name);
-    const tr = el("tr", pick ? "opportunity" : "");
+    const tr = el("tr", (pick ? "opportunity" : "") + (state.selected.has(name.ascii) ? " is-selected" : ""));
+    const selCell = el("td", "sel");
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = state.selected.has(name.ascii);
+    box.setAttribute("aria-label", "Select " + name.display);
+    box.addEventListener("click", (event) => {
+      const anchor = state.selectAnchor;
+      state.selectAnchor = name.ascii;
+      /* Shift-click: tick or untick every row between the last clicked row and this one. */
+      if (event.shiftKey && anchor && anchor !== name.ascii) {
+        const order = rows.map((row) => row.ascii);
+        const from = order.indexOf(anchor);
+        const to = order.indexOf(name.ascii);
+        if (from >= 0 && to >= 0) {
+          const [lo, hi] = from < to ? [from, to] : [to, from];
+          order.slice(lo, hi + 1).forEach((ascii) => {
+            if (box.checked) state.selected.add(ascii);
+            else state.selected.delete(ascii);
+          });
+          renderTable();
+          return;
+        }
+      }
+      if (box.checked) state.selected.add(name.ascii);
+      else state.selected.delete(name.ascii);
+      tr.classList.toggle("is-selected", box.checked);
+      paintSelection(pageRows);
+    });
+    selCell.append(box);
+    tr.append(selCell);
     const nameCell = el("td");
     const title = el("div", "name-line");
     const button = el("button", "name-btn", name.display);
@@ -937,7 +1204,7 @@ function renderTable() {
     if (!state.expanded.has(name.ascii)) return;
     const detail = el("tr", "detail");
     const cell = el("td");
-    cell.colSpan = 7;
+    cell.colSpan = 8;
     const scroll = el("div", "detail-scroll");
     const inner = el("table", "detail-table");
     const head = el("tr");
@@ -1334,6 +1601,8 @@ async function runCheck(mode) {
     return;
   }
   state.names = parsed.names || [];
+  const stillThere = new Set(state.names.map((name) => name.ascii));
+  state.selected = new Set([...state.selected].filter((ascii) => stillThere.has(ascii)));
   state.manual = state.listMode === "manual" || !!parsed.manual;
   state.tlds = state.manual ? [] : (parsed.tlds || []);
   const planned = state.names.reduce((sum, name) => sum + tldsFor(name).length, 0);
@@ -1581,18 +1850,18 @@ function buildReportHtml() {
   const when = new Date().toLocaleString();
   const sheet = summaryCsv();
   return "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>TLD check report</title><style>"
-    + "body{margin:0;background:#f6f1ea;color:#1e1a16;font:15px/1.45 'Segoe UI',Helvetica,sans-serif}"
-    + "main{width:min(1280px,calc(100% - 32px));margin:0 auto;padding:28px 0 64px}"
-    + "h1{font:600 32px Palatino,Georgia,serif;margin:0 0 6px} h2{font:600 22px Palatino,Georgia,serif;margin:28px 0 8px}"
-    + "p{margin:0 0 8px;color:#5f574e} .actions{display:flex;gap:8px;margin:16px 0}"
-    + "button{font:inherit;border-radius:999px;padding:8px 14px;border:1px solid #e4d9cb;background:#fffdf8;cursor:pointer}"
-    + "button.primary{background:#1b4f3a;color:#f4faf6;border-color:transparent;font-weight:700}"
-    + "table{width:100%;border-collapse:collapse;background:#fffdf8;border-radius:12px;overflow:hidden}"
-    + "th,td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid #e4d9cb;font-size:13px}"
-    + "th{font-size:12px;color:#5f574e} td.num{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}"
-    + "td.name{font-weight:700} .taken{color:#9c3418} .free{color:#0e6a3b} .unknown{color:#8a5a0d} .miss{color:#8a8176}"
-    + "tr.pick-row td{background:#e7f6ee}"
-    + "@media print{body{background:#fff}.actions{display:none}}"
+    + "body{margin:0;background:#f4f6f8;color:#1c252e;font:15px/1.5 'Public Sans',system-ui,-apple-system,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased}"
+    + "main{width:min(1280px,calc(100% - 32px));margin:0 auto;padding:32px 0 64px}"
+    + "h1{font-weight:700;font-size:28px;margin:0 0 6px} h2{font-weight:700;font-size:18px;margin:32px 0 8px}"
+    + "p{margin:0 0 8px;color:#637381} .actions{display:flex;gap:12px;margin:20px 0}"
+    + "button{font:inherit;font-size:14px;font-weight:700;border-radius:8px;min-height:36px;padding:6px 16px;border:1px solid rgba(145,158,171,.32);background:#fff;cursor:pointer}"
+    + "button.primary{background:#1c252e;color:#fff;border-color:transparent}"
+    + "table{width:100%;border-collapse:collapse;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 0 2px 0 rgba(145,158,171,.2),0 12px 24px -4px rgba(145,158,171,.12)}"
+    + "th,td{text-align:left;vertical-align:top;padding:10px 12px;border-bottom:1px dashed rgba(145,158,171,.24);font-size:13px}"
+    + "th{font-size:13px;color:#637381;font-weight:600;background:#f4f6f8} td.num{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}"
+    + "td.name{font-weight:600} .taken{color:#b71d18} .free{color:#118d57} .unknown{color:#b76e00} .miss{color:#919eab}"
+    + "tr.pick-row td{background:#e6f7f0}"
+    + "@media print{body{background:#fff}.actions{display:none}table{box-shadow:none}}"
     + "</style></head><body><main>"
     + "<h1>TLD check report</h1><p>" + escapeHtml(when) + " · " + names.length + " names in this view. Target ." + escapeHtml(targetTld() || "(none)") + ".</p>"
     + "<div class=\"actions\"><button class=\"primary\" id=\"print-btn\" type=\"button\">Print or save as PDF</button><button id=\"sheet-btn\" type=\"button\">Download spreadsheet</button></div>"
