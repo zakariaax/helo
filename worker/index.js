@@ -3,20 +3,20 @@ const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 const PBKDF2_ITERATIONS = 8000;
 const USER_COLUMNS = "id, username, contact_email AS email, name, role, daily_limit, password_hash, password_salt";
 const DEFAULT_THEME = {
-  accent: "#1f6b45",
-  bg: "#f3f4f1",
-  ink: "#1c1f1a",
+  accent: "#00a76f",
+  bg: "#ffffff",
+  ink: "#1c252e",
   card: "#ffffff",
-  muted: "#66706a",
-  line: "#e6e8e3",
+  muted: "#637381",
+  line: "#dfe3e8",
   fontSize: 15,
-  font: "Segoe UI",
-  heading: "Palatino",
-  radius: 18,
-  glow: true,
+  font: "Public Sans",
+  heading: "Public Sans",
+  radius: 16,
+  glow: false,
   density: "comfortable",
 };
-const FONT_NAMES = ["Segoe UI", "Palatino", "Georgia", "Avenir", "System"];
+const FONT_NAMES = ["Public Sans", "Inter", "DM Sans", "Nunito Sans"];
 
 export default {
   async fetch(request, env) {
@@ -47,6 +47,7 @@ async function handleApi(request, env, url) {
   if (request.method === "POST" && path === "/api/profile") return updateProfile(request, env, user);
   if (request.method === "POST" && path === "/api/usage") return reserveUsage(request, env, user);
   if (request.method === "POST" && path === "/api/site") return siteStatus(request, env, user);
+  if (request.method === "GET" && path === "/api/stats") return stats(env, user);
   if (request.method === "GET" && path === "/api/lists") return listLists(env, user);
   if (request.method === "POST" && path === "/api/lists") return createList(request, env, user);
   const listMatch = path.match(/^\/api\/lists\/([0-9a-f-]{36})$/);
@@ -416,6 +417,79 @@ function cleanDomain(value) {
   return text;
 }
 
+function lastDays(count) {
+  const out = [];
+  const now = Date.now();
+  for (let i = count - 1; i >= 0; i -= 1) out.push(new Date(now - i * 86400000).toISOString().slice(0, 10));
+  return out;
+}
+
+function sumDays(rows, days) {
+  const wanted = new Set(days);
+  return rows.reduce((total, row) => total + (wanted.has(row.day) ? Number(row.checks || 0) : 0), 0);
+}
+
+async function stats(env, user) {
+  const days = lastDays(14);
+  const prev = lastDays(28);
+  const last7 = days.slice(7);
+  const prev7 = prev.slice(14, 21);
+  const settings = await getSettings(env);
+  const quota = await quotaFor(env, user, settings.dailyLimit);
+  const mine = (await env.DB.prepare("SELECT day, checks FROM usage_days WHERE user_id = ? AND day >= ?").bind(user.id, prev[0]).all()).results || [];
+  const total = await env.DB.prepare("SELECT COALESCE(SUM(checks), 0) AS n, COUNT(*) AS d FROM usage_days WHERE user_id = ? AND checks > 0").bind(user.id).first();
+  const lists = (await env.DB.prepare(
+    `SELECT id, title, mode, target, updated_at,
+            CASE WHEN trim(names) = '' THEN 0 ELSE length(trim(names)) - length(replace(trim(names), char(10), '')) + 1 END AS name_count
+     FROM lists WHERE user_id = ? ORDER BY updated_at DESC`
+  ).bind(user.id).all()).results || [];
+  const byDay = Object.fromEntries(mine.map((row) => [row.day, Number(row.checks || 0)]));
+  const payload = {
+    today: utcDay(),
+    quota,
+    series: days.map((day) => ({ day, checks: byDay[day] || 0 })),
+    totals: {
+      allTime: Number(total?.n || 0),
+      activeDays: Number(total?.d || 0),
+      last7: sumDays(mine, last7),
+      prev7: sumDays(mine, prev7),
+      last14: sumDays(mine, days),
+    },
+    lists: {
+      count: lists.length,
+      names: lists.reduce((n, row) => n + Number(row.name_count || 0), 0),
+      bulk: lists.filter((row) => row.mode !== "manual").length,
+      manual: lists.filter((row) => row.mode === "manual").length,
+      recent: lists.slice(0, 5).map((row) => ({ id: row.id, title: row.title, mode: row.mode, target: row.target, updatedAt: row.updated_at, names: Number(row.name_count || 0) })),
+    },
+  };
+  if (user.role === "admin") {
+    const people = await env.DB.prepare(
+      "SELECT COUNT(*) AS n, SUM(CASE WHEN role = 'admin' THEN 1 ELSE 0 END) AS admins, SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) AS fresh FROM users"
+    ).bind(Date.now() - 7 * 86400000).first();
+    const everyone = (await env.DB.prepare("SELECT day, SUM(checks) AS checks, COUNT(DISTINCT user_id) AS people FROM usage_days WHERE day >= ? AND checks > 0 GROUP BY day").bind(days[0]).all()).results || [];
+    const top = (await env.DB.prepare(
+      `SELECT users.id, users.username, users.name, SUM(usage_days.checks) AS checks
+       FROM usage_days JOIN users ON users.id = usage_days.user_id
+       WHERE usage_days.day >= ? GROUP BY users.id ORDER BY checks DESC LIMIT 5`
+    ).bind(last7[0]).all()).results || [];
+    const savedLists = await env.DB.prepare("SELECT COUNT(*) AS n FROM lists").first();
+    const all = Object.fromEntries(everyone.map((row) => [row.day, row]));
+    payload.workspace = {
+      users: Number(people?.n || 0),
+      admins: Number(people?.admins || 0),
+      newUsers7d: Number(people?.fresh || 0),
+      activeToday: Number(all[utcDay()]?.people || 0),
+      checksToday: Number(all[utcDay()]?.checks || 0),
+      lists: Number(savedLists?.n || 0),
+      dailyLimit: settings.dailyLimit,
+      series: days.map((day) => ({ day, checks: Number(all[day]?.checks || 0), people: Number(all[day]?.people || 0) })),
+      top: top.map((row) => ({ name: row.name || row.username, username: row.username, checks: Number(row.checks || 0) })),
+    };
+  }
+  return json(payload);
+}
+
 async function listLists(env, user) {
   const result = await env.DB.prepare(
     "SELECT id, title, mode, target, updated_at, length(names) AS names_length FROM lists WHERE user_id = ? ORDER BY updated_at DESC"
@@ -710,54 +784,51 @@ function checkChrome(user, embed) {
   return `${sidebar}
 <div id="saas-bar"><input id="saas-title" maxlength="80" placeholder="List name" aria-label="List name"><button type="button" id="saas-save">Save list</button><span id="saas-note"></span></div>
 <style>
-  ${embed ? "" : "body { padding-left: 248px; }"}
-  .helo-side { position: fixed; top: 0; left: 0; bottom: 0; width: 248px; z-index: 40; background: var(--card, #fff); border-right: 1px solid var(--line, #e6e8e3); display: flex; flex-direction: column; padding: 18px 12px; }
+  ${embed ? ".mode-toggle-standalone { display: none !important; }" : "body { padding-left: 280px; }"}
+  .helo-side { position: fixed; top: 0; left: 0; bottom: 0; width: 280px; z-index: 40; background: var(--bg); border-right: 1px dashed var(--divider); display: flex; flex-direction: column; padding: 20px 16px; }
   .helo-brand, .helo-user { display: flex; align-items: center; gap: 10px; }
-  .helo-mark, .helo-avatar { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; font-weight: 800; flex: none; }
-  .helo-mark { background: var(--green, #1f6b45); color: var(--green-ink, #f4faf6); }
-  .helo-avatar { background: var(--soft, #eef6f1); color: var(--green, #1f6b45); border-radius: 50%; }
-  .helo-kicker { margin: 16px 8px 6px; color: var(--muted, #66706a); font-size: 11px; font-weight: 800; letter-spacing: 0.08em; }
+  .helo-mark, .helo-avatar { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; flex: none; color: var(--primary-ink); background: linear-gradient(135deg, var(--primary-light), var(--primary-dark)); }
+  .helo-avatar { border-radius: 50%; }
+  .helo-kicker { margin: 20px 12px 8px; color: var(--text-3); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; }
   .helo-side nav { display: flex; flex-direction: column; gap: 4px; }
-  .helo-side nav a { text-align: left; text-decoration: none; color: inherit; border-radius: 10px; padding: 8px 10px; }
-  .helo-side nav a.is-on { background: color-mix(in srgb, var(--ink, #1c1f1a) 6%, transparent); font-weight: 700; }
-  .helo-quota { margin: 12px 8px; color: var(--muted, #66706a); font-size: 13px; }
-  .helo-user { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line, #e6e8e3); }
+  .helo-side nav a { text-decoration: none; color: var(--text-2); border-radius: 8px; padding: 10px 12px; font-size: 14px; font-weight: 500; }
+  .helo-side nav a:hover { background: var(--hover); }
+  .helo-side nav a.is-on { background: var(--primary-8); color: var(--nav-on); font-weight: 600; }
+  .helo-quota { margin: 12px 8px; color: var(--text-2); font-size: 13px; }
+  .helo-user { margin-top: auto; padding-top: 12px; }
   .helo-user strong, .helo-user small { display: block; }
-  .helo-user small { color: var(--muted, #66706a); }
-  .helo-user button { margin-left: auto; border: 0; background: none; color: var(--green, #1f6b45); font-weight: 700; cursor: pointer; }
-  #saas-bar { position: sticky; top: 0; z-index: 20; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 16px; background: var(--card, #fff); border-bottom: 1px solid var(--line, #e6e8e3); }
-  #saas-bar button { font: inherit; border-radius: 999px; padding: 7px 12px; border: 0; background: var(--green, #1f6b45); color: var(--green-ink, #f4faf6); cursor: pointer; font-weight: 700; }
-  #saas-bar input { font: inherit; border: 1px solid var(--line, #e6e8e3); border-radius: 999px; padding: 7px 12px; min-width: 180px; background: var(--card, #fff); color: inherit; }
-  #saas-note { color: var(--muted, #66706a); font-size: 13px; }
+  .helo-user small { color: var(--text-3); }
+  .helo-user button { margin-left: auto; border: 0; background: none; color: var(--nav-on); font-weight: 700; cursor: pointer; }
+  #saas-bar { position: sticky; top: 0; z-index: 20; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 12px 40px; background: var(--header); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); border-bottom: 1px dashed var(--divider); }
+  #saas-bar button { font: inherit; font-size: 14px; border-radius: 8px; min-height: 36px; padding: 6px 14px; border: 0; background: var(--inherit-bg); color: var(--inherit-ink); cursor: pointer; font-weight: 700; }
+  #saas-bar button:hover { opacity: .9; }
+  #saas-bar input { font: inherit; font-size: 14px; border: 1px solid var(--input-line); border-radius: 8px; padding: 8px 12px; min-width: 220px; background: transparent; color: inherit; outline: none; }
+  #saas-bar input:focus { border-color: var(--text); box-shadow: inset 0 0 0 1px var(--text); }
+  #saas-note { color: var(--text-2); font-size: 13px; }
+  @media (max-width: 600px) { #saas-bar { padding: 10px 16px; } }
 </style>
 <script>
 (function () {
-  const FONT = { "Segoe UI": '"Segoe UI", Helvetica, sans-serif', Palatino: "Palatino, Georgia, serif", Georgia: "Georgia, serif", Avenir: '"Avenir Next", "Segoe UI", sans-serif', System: "system-ui, sans-serif" };
+  const FONT = {
+    "Public Sans": '"Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif',
+    Inter: 'Inter, system-ui, -apple-system, "Segoe UI", sans-serif',
+    "DM Sans": '"DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif',
+    "Nunito Sans": '"Nunito Sans", system-ui, -apple-system, "Segoe UI", sans-serif'
+  };
   function inkFor(hex) {
     const n = parseInt(String(hex || "").slice(1), 16);
-    if (!Number.isFinite(n)) return "#f4faf6";
+    if (!Number.isFinite(n)) return "#ffffff";
     const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
-    return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.62 ? "#142018" : "#f4faf6";
+    return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.62 ? "#1c252e" : "#ffffff";
   }
   function applyTheme(theme) {
     if (!theme) return;
     const root = document.documentElement;
-    root.style.setProperty("--bg", theme.bg);
-    root.style.setProperty("--card", theme.card);
-    root.style.setProperty("--ink", theme.ink);
-    root.style.setProperty("--muted", theme.muted);
-    root.style.setProperty("--line", theme.line);
-    root.style.setProperty("--green", theme.accent);
-    root.style.setProperty("--accent", theme.accent);
-    root.style.setProperty("--green-ink", inkFor(theme.accent));
-    root.style.setProperty("--accent-ink", inkFor(theme.accent));
+    root.style.setProperty("--primary", theme.accent);
+    root.style.setProperty("--primary-ink", inkFor(theme.accent));
     root.style.setProperty("--radius", theme.radius + "px");
-    document.body.style.fontSize = theme.fontSize + "px";
-    document.body.style.fontFamily = FONT[theme.font] || FONT["Segoe UI"];
-    document.body.style.color = theme.ink;
-    document.body.style.background = theme.glow
-      ? "radial-gradient(900px 420px at 8% -10%, color-mix(in srgb, " + theme.accent + " 30%, transparent), transparent 62%), " + theme.bg
-      : theme.bg;
+    root.style.setProperty("--font-size", theme.fontSize + "px");
+    root.style.setProperty("--font", FONT[theme.font] || FONT["Public Sans"]);
   }
   function publishQuota(quota) {
     if (!quota) return;
