@@ -1,6 +1,22 @@
 const COOKIE = "helo_session";
 const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 const PBKDF2_ITERATIONS = 8000;
+const USER_COLUMNS = "id, username, contact_email AS email, name, role, daily_limit, password_hash, password_salt";
+const DEFAULT_THEME = {
+  accent: "#1f6b45",
+  bg: "#f3f4f1",
+  ink: "#1c1f1a",
+  card: "#ffffff",
+  muted: "#66706a",
+  line: "#e6e8e3",
+  fontSize: 15,
+  font: "Segoe UI",
+  heading: "Palatino",
+  radius: 18,
+  glow: true,
+  density: "comfortable",
+};
+const FONT_NAMES = ["Segoe UI", "Palatino", "Georgia", "Avenir", "System"];
 
 export default {
   async fetch(request, env) {
@@ -28,59 +44,57 @@ async function handleApi(request, env, url) {
   const user = await currentUser(request, env);
   if (!user) return json({ error: "Sign in first." }, 401);
 
+  if (request.method === "POST" && path === "/api/profile") return updateProfile(request, env, user);
+  if (request.method === "POST" && path === "/api/usage") return reserveUsage(request, env, user);
   if (request.method === "GET" && path === "/api/lists") return listLists(env, user);
   if (request.method === "POST" && path === "/api/lists") return createList(request, env, user);
   const listMatch = path.match(/^\/api\/lists\/([0-9a-f-]{36})$/);
   if (listMatch && request.method === "GET") return getList(env, user, listMatch[1]);
   if (listMatch && request.method === "DELETE") return deleteList(env, user, listMatch[1]);
 
+  if (path === "/api/admin/settings" && request.method === "POST") return adminSettings(request, env, user);
   if (path === "/api/admin/users" && request.method === "GET") return adminUsers(env, user);
-  const roleMatch = path.match(/^\/api\/admin\/users\/([0-9a-f-]{36})$/);
-  if (roleMatch && request.method === "POST") return adminSetRole(request, env, user, roleMatch[1]);
+  if (path === "/api/admin/users" && request.method === "POST") return adminCreateUser(request, env, user);
+  const userMatch = path.match(/^\/api\/admin\/users\/([0-9a-f-]{36})$/);
+  if (userMatch && request.method === "POST") return adminUpdateUser(request, env, user, userMatch[1]);
 
   return json({ error: "Not found." }, 404);
 }
 
 async function signup(request, env) {
   const body = await readBody(request);
-  const email = cleanEmail(body.email);
-  const name = cleanName(body.name, email);
+  const username = cleanUsername(body.username || body.email);
+  const email = cleanEmail(body.contactEmail || "");
+  const name = cleanName(body.name, username);
   const password = String(body.password || "");
-  const emailError = validateEmail(email);
-  if (emailError) return json({ error: emailError }, 400);
+  const usernameError = validateUsername(username);
+  if (usernameError) return json({ error: usernameError }, 400);
+  if (email) {
+    const emailError = validateEmail(email);
+    if (emailError) return json({ error: emailError }, 400);
+  }
   if (!name) return json({ error: "Write your name." }, 400);
   const passwordError = validatePassword(password);
   if (passwordError) return json({ error: passwordError }, 400);
 
   const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM users").first();
   const role = Number(count?.n || 0) === 0 ? "admin" : "user";
-  const id = crypto.randomUUID();
-  const salt = randomSalt();
-  const passwordHash = await hashPassword(password, salt);
-  try {
-    await env.DB.prepare(
-      "INSERT INTO users (id, email, name, password_hash, password_salt, role, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
-    ).bind(id, email, name, passwordHash, salt, role, Date.now()).run();
-  } catch (error) {
-    if (String(error).includes("UNIQUE")) return json({ error: "An account with that email already exists." }, 409);
-    throw error;
-  }
-  const user = { id, email, name, role };
-  return sessionResponse(request, env, user, { user: publicUser(user) }, 201);
+  const created = await insertUser(env, { username, email, name, password, role, dailyLimit: null });
+  if (created.error) return json({ error: created.error }, created.status);
+  return sessionResponse(request, env, created.user, { user: publicUser(created.user) }, 201);
 }
 
 async function login(request, env) {
   const body = await readBody(request);
-  const email = cleanEmail(body.email);
+  const key = cleanUsername(body.username || body.email);
   const password = String(body.password || "");
   const row = await env.DB.prepare(
-    "SELECT id, email, name, role, password_hash, password_salt FROM users WHERE email = ?"
-  ).bind(email).first();
+    `SELECT ${USER_COLUMNS} FROM users WHERE username = ? OR contact_email = ?`
+  ).bind(key, key).first();
   if (!row || !(await verifyPassword(password, row.password_salt, row.password_hash))) {
-    return json({ error: "Email or password is wrong." }, 401);
+    return json({ error: "Username or password is wrong." }, 401);
   }
-  const user = { id: row.id, email: row.email, name: row.name, role: row.role };
-  return sessionResponse(request, env, user, { user: publicUser(user) });
+  return sessionResponse(request, env, row, { user: publicUser(row) });
 }
 
 async function logout(request, env) {
@@ -95,7 +109,31 @@ async function me(request, env) {
   const user = await currentUser(request, env);
   if (!user) return json({ user: null }, 200);
   const lists = await env.DB.prepare("SELECT COUNT(*) AS n FROM lists WHERE user_id = ?").bind(user.id).first();
-  return json({ user: publicUser(user), listCount: Number(lists?.n || 0) });
+  const settings = await getSettings(env);
+  const quota = await quotaFor(env, user, settings.dailyLimit);
+  return json({
+    user: publicUser(user),
+    listCount: Number(lists?.n || 0),
+    quota,
+    workspaceLimit: settings.dailyLimit,
+    theme: settings.theme,
+  });
+}
+
+async function updateProfile(request, env, user) {
+  const body = await readBody(request);
+  const name = cleanName(body.name, user.username);
+  const email = cleanEmail(body.email);
+  if (!name) return json({ error: "Write your name." }, 400);
+  if (email) {
+    const emailError = validateEmail(email);
+    if (emailError) return json({ error: emailError }, 400);
+    const taken = await env.DB.prepare("SELECT id FROM users WHERE contact_email = ? AND id != ?").bind(email, user.id).first();
+    if (taken) return json({ error: "That email is already used." }, 409);
+  }
+  await env.DB.prepare("UPDATE users SET name = ?, contact_email = ? WHERE id = ?").bind(name, email || null, user.id).run();
+  const row = await env.DB.prepare(`SELECT ${USER_COLUMNS} FROM users WHERE id = ?`).bind(user.id).first();
+  return json({ user: publicUser(row) });
 }
 
 async function changePassword(request, env) {
@@ -114,6 +152,28 @@ async function changePassword(request, env) {
   const passwordHash = await hashPassword(next, salt);
   await env.DB.prepare("UPDATE users SET password_hash = ?, password_salt = ? WHERE id = ?").bind(passwordHash, salt, user.id).run();
   return json({ ok: true });
+}
+
+async function reserveUsage(request, env, user) {
+  const body = await readBody(request);
+  const count = Math.floor(Number(body.count));
+  if (!Number.isFinite(count) || count < 1 || count > 20000) return json({ error: "That check size is not valid." }, 400);
+  const settings = await getSettings(env);
+  const quota = await quotaFor(env, user, settings.dailyLimit);
+  if (quota.unlimited) return json({ ...quota, reserved: count });
+  if (quota.used + count > quota.limit) {
+    return json({
+      error: "Daily limit reached. " + quota.used + " of " + quota.limit + " name checks used today.",
+      ...quota,
+    }, 429);
+  }
+  const day = utcDay();
+  await env.DB.prepare(
+    `INSERT INTO usage_days (user_id, day, checks) VALUES (?, ?, ?)
+     ON CONFLICT(user_id, day) DO UPDATE SET checks = checks + excluded.checks`
+  ).bind(user.id, day, count).run();
+  const next = await quotaFor(env, user, settings.dailyLimit);
+  return json({ ...next, reserved: count });
 }
 
 async function listLists(env, user) {
@@ -149,27 +209,181 @@ async function deleteList(env, user, id) {
   return json({ ok: true });
 }
 
-async function adminUsers(env, user) {
-  if (user.role !== "admin") return json({ error: "Only an admin can see users." }, 403);
-  const result = await env.DB.prepare(
-    "SELECT id, email, name, role, created_at FROM users ORDER BY created_at ASC"
-  ).all();
-  return json({ users: result.results || [] });
+async function adminSettings(request, env, actor) {
+  if (actor.role !== "admin") return json({ error: "Only an admin can change workspace settings." }, 403);
+  const body = await readBody(request);
+  const current = await getSettings(env);
+  const dailyLimit = body.dailyLimit == null ? current.dailyLimit : parseLimit(body.dailyLimit);
+  if (dailyLimit == null) return json({ error: "Daily limit must be a whole number from 0 to 100000." }, 400);
+  const theme = cleanTheme(body.theme || current.theme);
+  await env.DB.prepare("INSERT INTO app_settings (key, value) VALUES ('daily_limit', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(String(dailyLimit)).run();
+  await env.DB.prepare("INSERT INTO app_settings (key, value) VALUES ('theme', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(theme)).run();
+  return json({ workspaceLimit: dailyLimit, theme });
 }
 
-async function adminSetRole(request, env, actor, id) {
-  if (actor.role !== "admin") return json({ error: "Only an admin can change roles." }, 403);
+async function adminUsers(env, user) {
+  if (user.role !== "admin") return json({ error: "Only an admin can see users." }, 403);
+  const day = utcDay();
+  const result = await env.DB.prepare(
+    `SELECT users.id, users.username, users.contact_email AS email, users.name, users.role, users.daily_limit, users.created_at,
+            COALESCE(usage_days.checks, 0) AS used_today
+     FROM users
+     LEFT JOIN usage_days ON usage_days.user_id = users.id AND usage_days.day = ?
+     ORDER BY users.created_at ASC`
+  ).bind(day).all();
+  const settings = await getSettings(env);
+  return json({
+    users: (result.results || []).map(publicUser),
+    workspaceLimit: settings.dailyLimit,
+    theme: settings.theme,
+  });
+}
+
+async function adminCreateUser(request, env, actor) {
+  if (actor.role !== "admin") return json({ error: "Only an admin can add users." }, 403);
   const body = await readBody(request);
-  const role = body.role === "admin" ? "admin" : body.role === "user" ? "user" : "";
-  if (!role) return json({ error: "Role must be admin or user." }, 400);
-  const target = await env.DB.prepare("SELECT id, role FROM users WHERE id = ?").bind(id).first();
+  const username = cleanUsername(body.username);
+  const email = cleanEmail(body.email);
+  const name = cleanName(body.name, username);
+  const role = body.role === "admin" ? "admin" : "user";
+  const password = String(body.password || "");
+  const usernameError = validateUsername(username);
+  if (usernameError) return json({ error: usernameError }, 400);
+  if (!name) return json({ error: "Write a name." }, 400);
+  if (email) {
+    const emailError = validateEmail(email);
+    if (emailError) return json({ error: emailError }, 400);
+  }
+  const passwordError = validatePassword(password);
+  if (passwordError) return json({ error: passwordError }, 400);
+  const dailyLimit = body.dailyLimit == null || body.dailyLimit === "" ? null : parseLimit(body.dailyLimit);
+  if (body.dailyLimit != null && body.dailyLimit !== "" && dailyLimit == null) {
+    return json({ error: "Daily limit must be a whole number from 0 to 100000." }, 400);
+  }
+  const created = await insertUser(env, { username, email, name, password, role, dailyLimit });
+  if (created.error) return json({ error: created.error }, created.status);
+  return json({ user: publicUser(created.user) }, 201);
+}
+
+async function adminUpdateUser(request, env, actor, id) {
+  if (actor.role !== "admin") return json({ error: "Only an admin can change users." }, 403);
+  const body = await readBody(request);
+  const target = await env.DB.prepare(`SELECT ${USER_COLUMNS} FROM users WHERE id = ?`).bind(id).first();
   if (!target) return json({ error: "That user was not found." }, 404);
+  const username = body.username == null ? target.username : cleanUsername(body.username);
+  const email = body.email == null ? (target.email || "") : cleanEmail(body.email);
+  const name = body.name == null ? target.name : cleanName(body.name, username);
+  const role = body.role == null ? target.role : body.role === "admin" ? "admin" : body.role === "user" ? "user" : "";
+  const usernameError = validateUsername(username);
+  if (usernameError) return json({ error: usernameError }, 400);
+  if (!name) return json({ error: "Write a name." }, 400);
+  if (!role) return json({ error: "Role must be admin or user." }, 400);
+  if (email) {
+    const emailError = validateEmail(email);
+    if (emailError) return json({ error: emailError }, 400);
+  }
+  let dailyLimit = target.daily_limit == null ? null : Number(target.daily_limit);
+  if (body.dailyLimit != null) {
+    dailyLimit = body.dailyLimit === "" ? null : parseLimit(body.dailyLimit);
+    if (body.dailyLimit !== "" && dailyLimit == null) return json({ error: "Daily limit must be a whole number from 0 to 100000." }, 400);
+  }
   if (target.role === "admin" && role === "user") {
     const admins = await env.DB.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin'").first();
     if (Number(admins?.n || 0) <= 1) return json({ error: "The last admin has to stay an admin." }, 400);
   }
-  await env.DB.prepare("UPDATE users SET role = ? WHERE id = ?").bind(role, id).run();
-  return json({ ok: true, role });
+  const usernameTaken = await env.DB.prepare("SELECT id FROM users WHERE username = ? AND id != ?").bind(username, id).first();
+  if (usernameTaken) return json({ error: "That username is taken." }, 409);
+  if (email) {
+    const emailTaken = await env.DB.prepare("SELECT id FROM users WHERE contact_email = ? AND id != ?").bind(email, id).first();
+    if (emailTaken) return json({ error: "That email is already used." }, 409);
+  }
+  await env.DB.prepare(
+    "UPDATE users SET username = ?, email = ?, contact_email = ?, name = ?, role = ?, daily_limit = ? WHERE id = ?"
+  ).bind(username, username, email || null, name, role, dailyLimit, id).run();
+  const row = await env.DB.prepare(`SELECT ${USER_COLUMNS} FROM users WHERE id = ?`).bind(id).first();
+  return json({ user: publicUser(row) });
+}
+
+async function insertUser(env, fields) {
+  const usernameTaken = await env.DB.prepare("SELECT id FROM users WHERE username = ? OR email = ?").bind(fields.username, fields.username).first();
+  if (usernameTaken) return { error: "That username is taken.", status: 409 };
+  if (fields.email) {
+    const emailTaken = await env.DB.prepare("SELECT id FROM users WHERE contact_email = ?").bind(fields.email).first();
+    if (emailTaken) return { error: "That email is already used.", status: 409 };
+  }
+  const id = crypto.randomUUID();
+  const salt = randomSalt();
+  const passwordHash = await hashPassword(fields.password, salt);
+  await env.DB.prepare(
+    `INSERT INTO users (id, email, username, contact_email, name, password_hash, password_salt, role, daily_limit, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(id, fields.username, fields.username, fields.email || null, fields.name, passwordHash, salt, fields.role, fields.dailyLimit, Date.now()).run();
+  const user = await env.DB.prepare(`SELECT ${USER_COLUMNS} FROM users WHERE id = ?`).bind(id).first();
+  return { user };
+}
+
+function publicUser(user) {
+  return {
+    id: user.id,
+    username: user.username,
+    email: user.email || "",
+    name: user.name,
+    role: user.role,
+    dailyLimit: user.daily_limit == null || user.daily_limit === "" ? null : Number(user.daily_limit),
+    usedToday: user.used_today == null ? undefined : Number(user.used_today),
+    created_at: user.created_at,
+  };
+}
+
+async function quotaFor(env, user, workspaceLimit) {
+  const day = utcDay();
+  const row = await env.DB.prepare("SELECT checks FROM usage_days WHERE user_id = ? AND day = ?").bind(user.id, day).first();
+  const used = Number(row?.checks || 0);
+  if (user.role === "admin") return { used, limit: null, unlimited: true, remaining: null };
+  const limit = user.daily_limit == null ? workspaceLimit : Number(user.daily_limit);
+  return { used, limit, unlimited: false, remaining: Math.max(0, limit - used) };
+}
+
+async function getSettings(env) {
+  const rows = await env.DB.prepare("SELECT key, value FROM app_settings WHERE key IN ('daily_limit', 'theme')").all();
+  const found = Object.fromEntries((rows.results || []).map((row) => [row.key, row.value]));
+  const parsedLimit = parseLimit(found.daily_limit == null ? 100 : found.daily_limit);
+  let theme = DEFAULT_THEME;
+  try {
+    theme = cleanTheme(found.theme ? JSON.parse(found.theme) : DEFAULT_THEME);
+  } catch (error) {
+    theme = DEFAULT_THEME;
+  }
+  return { dailyLimit: parsedLimit == null ? 100 : parsedLimit, theme };
+}
+
+function parseLimit(value) {
+  if (typeof value === "string" && value.trim() === "") return null;
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < 0 || number > 100000) return null;
+  return number;
+}
+
+function cleanTheme(input) {
+  const theme = { ...DEFAULT_THEME };
+  const source = input && typeof input === "object" ? input : {};
+  for (const key of ["accent", "bg", "ink", "card", "muted", "line"]) {
+    if (typeof source[key] === "string" && /^#[0-9a-fA-F]{6}$/.test(source[key])) theme[key] = source[key].toLowerCase();
+  }
+  const size = Number(source.fontSize);
+  if (Number.isInteger(size) && size >= 13 && size <= 22) theme.fontSize = size;
+  const radius = Number(source.radius);
+  if (Number.isInteger(radius) && radius >= 8 && radius <= 28) theme.radius = radius;
+  if (FONT_NAMES.includes(source.font)) theme.font = source.font;
+  if (FONT_NAMES.includes(source.heading)) theme.heading = source.heading;
+  if (source.glow === false) theme.glow = false;
+  if (source.glow === true) theme.glow = true;
+  theme.density = source.density === "compact" ? "compact" : "comfortable";
+  return theme;
+}
+
+function utcDay() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function parseList(body) {
@@ -196,7 +410,7 @@ async function currentUser(request, env) {
   const token = readCookie(request, COOKIE);
   if (!token) return null;
   const row = await env.DB.prepare(
-    `SELECT users.id, users.email, users.name, users.role, sessions.expires_at
+    `SELECT users.id, users.username, users.contact_email AS email, users.name, users.role, users.daily_limit, sessions.expires_at
      FROM sessions JOIN users ON users.id = sessions.user_id
      WHERE sessions.token_hash = ?`
   ).bind(await sha256(token)).first();
@@ -205,21 +419,25 @@ async function currentUser(request, env) {
     await env.DB.prepare("DELETE FROM sessions WHERE token_hash = ?").bind(await sha256(token)).run();
     return null;
   }
-  return { id: row.id, email: row.email, name: row.name, role: row.role };
-}
-
-function publicUser(user) {
-  return { id: user.id, email: user.email, name: user.name, role: user.role };
+  return row;
 }
 
 async function serveCheck(request, env) {
+  const url = new URL(request.url);
   const user = await currentUser(request, env);
   if (!user) return Response.redirect(new URL("/", request.url), 302);
+  if (url.searchParams.get("embed") !== "1") {
+    const dest = new URL("/", request.url);
+    dest.searchParams.set("page", "check");
+    const list = url.searchParams.get("list");
+    if (list) dest.searchParams.set("list", list);
+    return Response.redirect(dest, 302);
+  }
   const asset = await env.ASSETS.fetch(new Request(new URL("/check.html", request.url)));
   if (!asset.ok) return asset;
   const html = await asset.text();
-  const bar = checkBar(user);
-  const body = html.includes("<body>") ? html.replace("<body>", "<body>" + bar) : bar + html;
+  const chrome = checkChrome(user, true);
+  const body = html.includes("<body>") ? html.replace("<body>", "<body>" + chrome) : chrome + html;
   return new Response(body, {
     headers: {
       "content-type": "text/html; charset=utf-8",
@@ -228,18 +446,94 @@ async function serveCheck(request, env) {
   });
 }
 
-function checkBar(user) {
-  return `<div id="saas-bar"><a href="/">Dashboard</a><input id="saas-title" maxlength="80" placeholder="List name" aria-label="List name"><button type="button" id="saas-save">Save list</button><span id="saas-note"></span><span id="saas-who">${escapeHtml(user.email)}</span></div>
+function checkChrome(user, embed) {
+  const who = escapeHtml(user.name || user.username);
+  const role = user.role === "admin" ? "Admin" : "User";
+  const usersLink = user.role === "admin" ? '<a href="/?page=users">Users</a>' : "";
+  const sidebar = embed ? "" : `<aside class="helo-side" id="helo-side">
+  <div class="helo-brand"><div class="helo-mark">H</div><strong>Helo</strong></div>
+  <div class="helo-kicker">OVERVIEW</div>
+  <nav>
+    <a href="/">Dashboard</a>
+    <a href="/?page=lists">Saved lists</a>
+    <a class="is-on" href="/check">Check names</a>
+    ${usersLink}
+    <a href="/?page=settings">Settings</a>
+  </nav>
+  <div class="helo-quota" id="helo-quota"></div>
+  <div class="helo-user">
+    <div class="helo-avatar">${escapeHtml((user.name || user.username || "H").slice(0, 1).toUpperCase())}</div>
+    <div><strong>${who}</strong><small>${role}</small></div>
+    <button type="button" id="helo-signout">Sign out</button>
+  </div>
+</aside>`;
+  return `${sidebar}
+<div id="saas-bar"><input id="saas-title" maxlength="80" placeholder="List name" aria-label="List name"><button type="button" id="saas-save">Save list</button><span id="saas-note"></span></div>
 <style>
-  #saas-bar { position: sticky; top: 0; z-index: 20; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 16px; background: #fffdf8; border-bottom: 1px solid #e4d9cb; }
-  #saas-bar a, #saas-bar button { font: inherit; border-radius: 999px; padding: 7px 12px; border: 1px solid #e4d9cb; background: #fff; color: #1e1a16; text-decoration: none; font-weight: 700; }
-  #saas-bar button { background: #1b4f3a; color: #f4faf6; border-color: transparent; cursor: pointer; }
-  #saas-bar input { font: inherit; border: 1px solid #e4d9cb; border-radius: 999px; padding: 7px 12px; min-width: 180px; }
-  #saas-note { color: #5f574e; font-size: 13px; }
-  #saas-who { margin-left: auto; color: #5f574e; font-size: 13px; }
+  ${embed ? "" : "body { padding-left: 248px; }"}
+  .helo-side { position: fixed; top: 0; left: 0; bottom: 0; width: 248px; z-index: 40; background: var(--card, #fff); border-right: 1px solid var(--line, #e6e8e3); display: flex; flex-direction: column; padding: 18px 12px; }
+  .helo-brand, .helo-user { display: flex; align-items: center; gap: 10px; }
+  .helo-mark, .helo-avatar { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; font-weight: 800; flex: none; }
+  .helo-mark { background: var(--green, #1f6b45); color: var(--green-ink, #f4faf6); }
+  .helo-avatar { background: var(--soft, #eef6f1); color: var(--green, #1f6b45); border-radius: 50%; }
+  .helo-kicker { margin: 16px 8px 6px; color: var(--muted, #66706a); font-size: 11px; font-weight: 800; letter-spacing: 0.08em; }
+  .helo-side nav { display: flex; flex-direction: column; gap: 4px; }
+  .helo-side nav a { text-align: left; text-decoration: none; color: inherit; border-radius: 10px; padding: 8px 10px; }
+  .helo-side nav a.is-on { background: color-mix(in srgb, var(--ink, #1c1f1a) 6%, transparent); font-weight: 700; }
+  .helo-quota { margin: 12px 8px; color: var(--muted, #66706a); font-size: 13px; }
+  .helo-user { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line, #e6e8e3); }
+  .helo-user strong, .helo-user small { display: block; }
+  .helo-user small { color: var(--muted, #66706a); }
+  .helo-user button { margin-left: auto; border: 0; background: none; color: var(--green, #1f6b45); font-weight: 700; cursor: pointer; }
+  #saas-bar { position: sticky; top: 0; z-index: 20; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 16px; background: var(--card, #fff); border-bottom: 1px solid var(--line, #e6e8e3); }
+  #saas-bar button { font: inherit; border-radius: 999px; padding: 7px 12px; border: 0; background: var(--green, #1f6b45); color: var(--green-ink, #f4faf6); cursor: pointer; font-weight: 700; }
+  #saas-bar input { font: inherit; border: 1px solid var(--line, #e6e8e3); border-radius: 999px; padding: 7px 12px; min-width: 180px; background: var(--card, #fff); color: inherit; }
+  #saas-note { color: var(--muted, #66706a); font-size: 13px; }
 </style>
 <script>
 (function () {
+  const FONT = { "Segoe UI": '"Segoe UI", Helvetica, sans-serif', Palatino: "Palatino, Georgia, serif", Georgia: "Georgia, serif", Avenir: '"Avenir Next", "Segoe UI", sans-serif', System: "system-ui, sans-serif" };
+  function inkFor(hex) {
+    const n = parseInt(String(hex || "").slice(1), 16);
+    if (!Number.isFinite(n)) return "#f4faf6";
+    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.62 ? "#142018" : "#f4faf6";
+  }
+  function applyTheme(theme) {
+    if (!theme) return;
+    const root = document.documentElement;
+    root.style.setProperty("--bg", theme.bg);
+    root.style.setProperty("--card", theme.card);
+    root.style.setProperty("--ink", theme.ink);
+    root.style.setProperty("--muted", theme.muted);
+    root.style.setProperty("--line", theme.line);
+    root.style.setProperty("--green", theme.accent);
+    root.style.setProperty("--accent", theme.accent);
+    root.style.setProperty("--green-ink", inkFor(theme.accent));
+    root.style.setProperty("--accent-ink", inkFor(theme.accent));
+    root.style.setProperty("--radius", theme.radius + "px");
+    document.body.style.fontSize = theme.fontSize + "px";
+    document.body.style.fontFamily = FONT[theme.font] || FONT["Segoe UI"];
+    document.body.style.color = theme.ink;
+    document.body.style.background = theme.glow
+      ? "radial-gradient(900px 420px at 8% -10%, color-mix(in srgb, " + theme.accent + " 30%, transparent), transparent 62%), " + theme.bg
+      : theme.bg;
+  }
+  function publishQuota(quota) {
+    if (!quota) return;
+    const text = quota.unlimited ? "Checks today: unlimited" : ("Checks today: " + quota.used + " / " + quota.limit);
+    const node = document.getElementById("helo-quota");
+    if (node) node.textContent = text;
+    if (window.parent && window.parent !== window) window.parent.postMessage({ type: "helo-quota", quota: quota }, location.origin);
+  }
+  fetch("/api/me").then(function (response) { return response.json(); }).then(function (data) {
+    applyTheme(data.theme);
+    publishQuota(data.quota);
+  }).catch(function () {});
+  const signout = document.getElementById("helo-signout");
+  if (signout) signout.addEventListener("click", function () {
+    fetch("/api/logout", { method: "POST" }).then(function () { location.href = "/"; });
+  });
   const params = new URLSearchParams(location.search);
   const existing = params.get("list");
   function fill(list) {
@@ -264,25 +558,52 @@ function checkBar(user) {
   }
   const button = document.getElementById("saas-save");
   const note = document.getElementById("saas-note");
-  if (!button) return;
-  button.addEventListener("click", function () {
-    const title = document.getElementById("saas-title").value.trim();
-    note.textContent = "Saving…";
-    fetch("/api/lists", {
+  if (button) {
+    button.addEventListener("click", function () {
+      const title = document.getElementById("saas-title").value.trim();
+      note.textContent = "Saving…";
+      fetch("/api/lists", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: title,
+          names: document.getElementById("names").value,
+          tlds: document.getElementById("tlds").value,
+          mode: document.getElementById("mode-manual").classList.contains("is-on") ? "manual" : "bulk",
+          target: document.getElementById("target").value || "si"
+        })
+      }).then(function (response) { return response.json().then(function (data) { return { ok: response.ok, data: data }; }); })
+        .then(function (result) {
+          note.textContent = result.ok ? "Saved." : (result.data.error || "Could not save.");
+        }).catch(function () { note.textContent = "Could not save."; });
+    });
+  }
+  const check = document.getElementById("check");
+  if (!check) return;
+  let armed = false;
+  check.addEventListener("click", function (event) {
+    if (armed) { armed = false; return; }
+    const names = (document.getElementById("names").value || "").split(/\\n/).map(function (line) { return line.trim(); }).filter(Boolean);
+    if (!names.length) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (note) note.textContent = "Checking the daily limit…";
+    fetch("/api/usage", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        title: title,
-        names: document.getElementById("names").value,
-        tlds: document.getElementById("tlds").value,
-        mode: document.getElementById("mode-manual").classList.contains("is-on") ? "manual" : "bulk",
-        target: document.getElementById("target").value || "si"
-      })
+      body: JSON.stringify({ count: names.length })
     }).then(function (response) { return response.json().then(function (data) { return { ok: response.ok, data: data }; }); })
       .then(function (result) {
-        note.textContent = result.ok ? "Saved." : (result.data.error || "Could not save.");
-      }).catch(function () { note.textContent = "Could not save."; });
-  });
+        if (!result.ok) {
+          if (note) note.textContent = result.data.error || "Daily limit reached.";
+          return;
+        }
+        publishQuota(result.data);
+        if (note) note.textContent = result.data.unlimited ? "No daily limit on this account." : (result.data.remaining + " checks left today.");
+        armed = true;
+        check.click();
+      }).catch(function () { if (note) note.textContent = "Could not check the daily limit."; });
+  }, true);
 })();
 </script>`;
 }
@@ -324,10 +645,19 @@ function cleanEmail(value) {
   return String(value || "").trim().toLowerCase();
 }
 
-function cleanName(value, email) {
+function cleanUsername(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function cleanName(value, fallback) {
   const name = String(value || "").trim().slice(0, 80);
   if (name) return name;
-  return email.split("@")[0].slice(0, 80);
+  return String(fallback || "").split("@")[0].slice(0, 80);
+}
+
+function validateUsername(username) {
+  if (!/^[a-z0-9][a-z0-9._-]{1,31}$/.test(username)) return "Use 2–32 letters or numbers for the username.";
+  return "";
 }
 
 function validateEmail(email) {

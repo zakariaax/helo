@@ -15,70 +15,103 @@
     --green-ink: #f4faf6;
     --soft: #eef6f1;
     --shadow: 0 16px 40px rgba(28, 40, 32, 0.06);
+    --radius: 18px;
+    --font-size: 15px;
+    --font: "Segoe UI", Helvetica, sans-serif;
+    --heading: Palatino, Georgia, serif;
+    --pad: 22px;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink); font: 15px/1.45 "Segoe UI", Helvetica, sans-serif; }
-  button, input { font: inherit; color: inherit; }
+  body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink); font: var(--font-size)/1.45 var(--font); }
+  body.glow {
+    background:
+      radial-gradient(900px 420px at 0% -10%, color-mix(in srgb, var(--green) 28%, transparent), transparent 60%),
+      var(--bg);
+  }
+  button, input, select { font: inherit; color: inherit; }
   a { color: inherit; }
+  h1 { font: 600 28px var(--heading); margin: 0 0 6px; letter-spacing: -0.02em; }
   .auth-wrap { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
-  .auth-card { width: min(440px, 100%); background: var(--card); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); padding: 28px; }
+  .auth-card { width: min(440px, 100%); background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px; }
   .brand-row { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
   .mark { width: 36px; height: 36px; border-radius: 10px; background: var(--green); color: var(--green-ink); display: grid; place-items: center; font-weight: 800; }
-  h1 { font: 600 28px Palatino, Georgia, serif; margin: 0 0 6px; }
   .lede { color: var(--muted); margin: 0 0 18px; }
   label { display: block; font-size: 13px; font-weight: 700; margin: 12px 0 6px; }
-  input { width: 100%; border: 1px solid var(--line); background: #fff; border-radius: 12px; padding: 10px 12px; }
+  input, select { width: 100%; border: 1px solid var(--line); background: var(--card); border-radius: 12px; padding: 10px 12px; }
   .primary, .ghost, .texty { border-radius: 999px; padding: 10px 14px; cursor: pointer; }
   .primary { background: var(--green); color: var(--green-ink); border: 0; font-weight: 700; }
-  .ghost { background: #fff; border: 1px solid var(--line); }
+  .ghost { background: var(--card); border: 1px solid var(--line); }
   .texty { background: none; border: 0; color: var(--green); font-weight: 700; padding: 0; }
   .error { color: #9c3418; font-size: 13px; min-height: 1.2em; margin: 8px 0; }
-  .shell { min-height: 100vh; display: grid; grid-template-columns: 248px 1fr; }
-  aside { background: #fff; border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 18px 12px; position: sticky; top: 0; height: 100vh; }
+  .ok { color: var(--green); }
+  .shell { min-height: 100vh; }
+  aside {
+    position: fixed; top: 0; left: 0; bottom: 0; width: 248px; z-index: 30;
+    background: var(--card); border-right: 1px solid var(--line);
+    display: flex; flex-direction: column; padding: 18px 12px;
+  }
   .nav-group { margin: 16px 8px 6px; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: 0.08em; }
-  nav button { width: 100%; text-align: left; border: 0; background: transparent; border-radius: 10px; padding: 8px 10px; cursor: pointer; }
-  nav button.is-on { background: #f2f3f0; font-weight: 700; }
+  nav { display: flex; flex-direction: column; gap: 4px; }
+  nav button, nav a { width: 100%; text-align: left; border: 0; background: transparent; border-radius: 10px; padding: 8px 10px; cursor: pointer; text-decoration: none; color: inherit; }
+  nav button.is-on, nav a.is-on { background: color-mix(in srgb, var(--ink) 6%, transparent); font-weight: 700; }
+  .quota { margin: 12px 8px 0; color: var(--muted); font-size: 13px; }
   .side-user { margin-top: auto; padding: 12px 8px; border-top: 1px solid var(--line); display: flex; gap: 8px; align-items: center; }
   .side-user .who { min-width: 0; }
   .side-user strong, .side-user small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .side-user small { color: var(--muted); }
   .side-user button { margin-left: auto; white-space: nowrap; flex: none; }
   .avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--soft); color: var(--green); display: grid; place-items: center; font-weight: 800; flex: none; }
-  main { padding: 28px; }
+    main { margin-left: 248px; min-height: 100vh; padding: 28px; }
+  body.is-check main { padding: 0; }
+  #page-check, #checker-frame { width: 100%; height: 100vh; border: 0; display: block; background: var(--bg); }
   .kicker { color: var(--green); font-size: 12px; font-weight: 800; letter-spacing: 0.08em; margin: 0 0 6px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); padding: 22px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: var(--pad); }
   .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
-  .stat b { display: block; font-size: 28px; margin-top: 4px; }
+  .stat b { display: block; font-size: 28px; margin-top: 4px; font-family: var(--heading); }
   .stat span { color: var(--muted); font-size: 13px; }
   table { width: 100%; border-collapse: collapse; }
   th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
   th { color: var(--muted); font-size: 12px; }
+  td input, td select { min-width: 0; }
   .row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
   .hidden { display: none !important; }
   .top-actions { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 14px; }
-  @media (max-width: 800px) {
-    .shell { grid-template-columns: 1fr; }
-    aside { position: relative; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
-    nav { display: flex; gap: 6px; overflow: auto; }
-    .nav-group { display: none; }
-    nav button { width: auto; white-space: nowrap; }
-    .grid { grid-template-columns: 1fr; }
-    main { padding: 16px; }
+  .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; }
+  .span-2 { grid-column: span 2; }
+  .inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .inline input { width: auto; min-width: 88px; }
+  .swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+  .swatch { width: 42px; height: 42px; border-radius: 14px; border: 2px solid transparent; padding: 0; }
+  .swatch.is-on { border-color: var(--ink); }
+  .colors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .colors input[type="color"] { height: 42px; padding: 4px; }
+  .preview { display: grid; grid-template-columns: 180px 1fr; min-height: 180px; overflow: hidden; padding: 0; }
+  .preview aside { position: relative; width: auto; height: auto; inset: auto; }
+  .preview .sample { padding: 16px; }
+  .hint { color: var(--muted); font-size: 13px; margin: 6px 0 0; }
+  @media (max-width: 900px) {
+    .form-grid, .colors, .grid, .preview { grid-template-columns: 1fr; }
+    .span-2 { grid-column: auto; }
+    .preview aside { display: none; }
   }
 </style>
 </head>
-<body>
+<body class="glow">
 <div id="auth" class="auth-wrap hidden">
   <form class="auth-card" id="auth-form">
     <div class="brand-row"><div class="mark">H</div><strong>Helo</strong></div>
     <h1 id="auth-title">Sign in</h1>
-    <p class="lede" id="auth-lede">Use the account you created for this workspace.</p>
-    <div id="name-field">
+    <p class="lede" id="auth-lede">Use the username for this workspace.</p>
+    <div id="name-field" class="hidden">
       <label for="name">Name</label>
       <input id="name" autocomplete="name">
     </div>
-    <label for="email" id="email-label">Username</label>
-    <input id="email" type="text" autocomplete="username" required>
+    <label for="username">Username</label>
+    <input id="username" type="text" autocomplete="username" required>
+    <div id="contact-field" class="hidden">
+      <label for="contact-email">Email</label>
+      <input id="contact-email" type="email" autocomplete="email" placeholder="Optional">
+    </div>
     <label for="password">Password</label>
     <input id="password" type="password" autocomplete="current-password" required>
     <p class="error" id="auth-error"></p>
@@ -94,14 +127,16 @@
     <nav>
       <button type="button" data-page="home" class="is-on">Dashboard</button>
       <button type="button" data-page="lists">Saved lists</button>
+      <button type="button" data-page="check">Check names</button>
       <button type="button" id="nav-users" data-page="users" class="hidden">Users</button>
       <button type="button" data-page="settings">Settings</button>
     </nav>
+    <div class="quota" id="side-quota"></div>
     <div class="side-user">
       <div class="avatar" id="avatar">H</div>
       <div class="who">
         <strong id="who-name">Account</strong>
-        <small id="who-meta">Free plan</small>
+        <small id="who-meta">User</small>
       </div>
       <button class="texty" type="button" id="sign-out">Sign out</button>
     </div>
@@ -111,20 +146,24 @@
       <p class="kicker">YOUR ACCOUNT IS READY</p>
       <div class="card">
         <h1>Check names, then keep the lists that matter.</h1>
-        <p class="lede">The scan still runs in your browser. A saved list stays on this account, with the investor score and Pick rows on the checker.</p>
-        <a class="primary" href="/check" style="display:inline-block;text-decoration:none">Check names</a>
+        <p class="lede">The scan still runs in your browser. The sidebar stays on the checker, and a saved list stays on this account.</p>
+        <button class="primary" type="button" id="go-check">Check names</button>
       </div>
       <div class="grid">
-        <div class="card stat"><span>Plan</span><b>Free</b></div>
+        <div class="card stat"><span>Checks today</span><b id="home-quota">—</b></div>
         <div class="card stat"><span>Saved lists</span><b id="home-lists">0</b></div>
         <div class="card stat"><span>Role</span><b id="home-role">User</b></div>
       </div>
     </section>
 
+    <section id="page-check" class="hidden">
+      <iframe id="checker-frame" title="Check names"></iframe>
+    </section>
+
     <section id="page-lists" class="hidden">
       <div class="top-actions">
         <h1>Saved lists</h1>
-        <a class="primary" href="/check" style="text-decoration:none">New check</a>
+        <button class="primary" type="button" id="new-check">New check</button>
       </div>
       <div class="card">
         <table>
@@ -137,22 +176,111 @@
 
     <section id="page-users" class="hidden">
       <div class="top-actions"><h1>Users</h1></div>
+      <form class="card" id="limit-form" style="margin-bottom:14px">
+        <label for="workspace-limit">Daily name checks for a normal user</label>
+        <div class="inline">
+          <input id="workspace-limit" type="number" min="0" max="100000" value="100">
+          <button class="primary" type="submit">Save limit</button>
+        </div>
+        <p class="hint">Admins are unlimited. A personal limit on a row replaces this number for that user. One name in a scan counts as one check.</p>
+        <p class="error" id="limit-error"></p>
+      </form>
+      <form class="card" id="add-user-form" style="margin-bottom:14px">
+        <h2 style="margin:0 0 8px;font:600 22px var(--heading)">Add a user</h2>
+        <div class="form-grid">
+          <div><label for="new-username">Username</label><input id="new-username" autocomplete="off" required></div>
+          <div><label for="new-name">Name</label><input id="new-name" autocomplete="off"></div>
+          <div><label for="new-email">Email</label><input id="new-email" type="email" placeholder="Optional" autocomplete="off"></div>
+          <div>
+            <label for="new-role">Role</label>
+            <select id="new-role"><option value="user">User</option><option value="admin">Admin</option></select>
+          </div>
+          <div><label for="new-limit">Personal daily limit</label><input id="new-limit" type="number" min="0" max="100000" placeholder="Workspace default"></div>
+          <div>
+            <label for="new-password">Password</label>
+            <input id="new-password" type="text" autocomplete="off">
+          </div>
+        </div>
+        <div class="inline" style="margin-top:12px">
+          <button class="ghost" type="button" id="generate-password">Generate password</button>
+          <button class="ghost" type="button" id="copy-password">Copy</button>
+          <button class="primary" type="submit">Add user</button>
+        </div>
+        <p class="hint">Generate makes a password you can read and share. A password you type needs at least 8 characters.</p>
+        <p class="error" id="add-user-error"></p>
+      </form>
       <div class="card">
         <table>
-          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Joined</th><th></th></tr></thead>
+          <thead><tr><th>Username</th><th>Email</th><th>Name</th><th>Role</th><th>Daily limit</th><th>Today</th><th></th></tr></thead>
           <tbody id="user-body"></tbody>
         </table>
+        <p class="hint">Email stays blank until you set one. Username and email are separate. Role can be admin for more than one person.</p>
         <p class="error" id="user-error"></p>
       </div>
     </section>
 
     <section id="page-settings" class="hidden">
       <h1>Settings</h1>
+      <form class="card" id="profile-form" style="max-width:720px;margin-bottom:14px">
+        <h2 style="margin:0;font:600 22px var(--heading)">Your details</h2>
+        <div class="form-grid">
+          <div><label for="profile-name">Name</label><input id="profile-name" required></div>
+          <div><label for="profile-email">Email</label><input id="profile-email" type="email" placeholder="Not set yet"></div>
+        </div>
+        <p class="error" id="profile-error"></p>
+        <button class="primary" type="submit">Save details</button>
+      </form>
+      <form class="card" id="theme-form" style="margin-bottom:14px">
+        <h2 style="margin:0 0 8px;font:600 22px var(--heading)">Appearance</h2>
+        <p class="lede">These choices restyle the workspace and the checker.</p>
+        <div class="swatches" id="presets"></div>
+        <div class="colors">
+          <div><label for="color-accent">Accent</label><input id="color-accent" type="color"></div>
+          <div><label for="color-bg">Background</label><input id="color-bg" type="color"></div>
+          <div><label for="color-ink">Text</label><input id="color-ink" type="color"></div>
+          <div><label for="color-card">Cards</label><input id="color-card" type="color"></div>
+          <div><label for="color-muted">Muted text</label><input id="color-muted" type="color"></div>
+          <div><label for="color-line">Lines</label><input id="color-line" type="color"></div>
+        </div>
+        <div class="form-grid">
+          <div><label for="font-size">Font size <span id="font-size-value">15</span></label><input id="font-size" type="range" min="13" max="22" value="15"></div>
+          <div><label for="radius">Corners <span id="radius-value">18</span></label><input id="radius" type="range" min="8" max="28" value="18"></div>
+          <div>
+            <label for="font-family">Font</label>
+            <select id="font-family"><option>Segoe UI</option><option>Avenir</option><option>System</option><option>Georgia</option><option>Palatino</option></select>
+          </div>
+          <div>
+            <label for="heading-font">Headings</label>
+            <select id="heading-font"><option>Palatino</option><option>Georgia</option><option>Segoe UI</option><option>Avenir</option><option>System</option></select>
+          </div>
+        </div>
+        <div class="inline" style="margin-top:12px">
+          <label class="inline" style="margin:0"><input id="glow" type="checkbox" checked style="width:auto"> Soft glow</label>
+          <label class="inline" style="margin:0"><input id="density" type="checkbox" style="width:auto"> Compact cards</label>
+          <button class="primary" type="submit">Save appearance</button>
+        </div>
+        <p class="error" id="theme-error"></p>
+        <div class="card preview" id="preview" style="margin-top:16px">
+          <aside>
+            <div class="brand-row"><div class="mark">H</div><strong>Helo</strong></div>
+            <div class="nav-group">PREVIEW</div>
+            <nav><button type="button" class="is-on">Dashboard</button><button type="button">Settings</button></nav>
+          </aside>
+          <div class="sample">
+            <p class="kicker">LIVE PREVIEW</p>
+            <h2 style="margin:0 0 8px;font:600 26px var(--heading)">A calmer workspace</h2>
+            <p class="lede">Color, type, and corners update here before you save.</p>
+            <button class="primary" type="button">Check names</button>
+          </div>
+        </div>
+      </form>
       <form class="card" id="password-form" style="max-width:460px">
+        <h2 style="margin:0;font:600 22px var(--heading)">Password</h2>
         <label for="current-password">Current password</label>
         <input id="current-password" type="password" autocomplete="current-password" required>
         <label for="next-password">New password</label>
         <input id="next-password" type="password" autocomplete="new-password" required>
+        <p class="hint">A new password needs at least 8 characters.</p>
         <p class="error" id="password-error"></p>
         <button class="primary" type="submit">Change password</button>
       </form>
@@ -160,10 +288,83 @@
   </main>
 </div>
 <script>
+const FONTS = {
+  "Segoe UI": '"Segoe UI", Helvetica, sans-serif',
+  Palatino: "Palatino, Georgia, serif",
+  Georgia: "Georgia, serif",
+  Avenir: '"Avenir Next", "Segoe UI", sans-serif',
+  System: "system-ui, sans-serif",
+};
+const PRESETS = {
+  grove: { accent: "#1f6b45", bg: "#f3f4f1", ink: "#1c1f1a", card: "#ffffff", muted: "#66706a", line: "#e6e8e3" },
+  midnight: { accent: "#8eb6ff", bg: "#12151c", ink: "#f4f6fb", card: "#1c2230", muted: "#a7b0c0", line: "#2c3444" },
+  ocean: { accent: "#0f6e8c", bg: "#eef5f7", ink: "#14242b", card: "#ffffff", muted: "#5d727a", line: "#d5e3e8" },
+  sand: { accent: "#9a5b2f", bg: "#f6f0e6", ink: "#2a2118", card: "#fffdf8", muted: "#74685b", line: "#eadfce" },
+};
 const auth = document.getElementById("auth");
 const app = document.getElementById("app");
 let mode = "login";
 let me = null;
+let workspace = null;
+
+function inkFor(hex) {
+  const n = parseInt(String(hex || "").slice(1), 16);
+  if (!Number.isFinite(n)) return "#f4faf6";
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.62 ? "#142018" : "#f4faf6";
+}
+
+function themeFromForm() {
+  return {
+    accent: document.getElementById("color-accent").value,
+    bg: document.getElementById("color-bg").value,
+    ink: document.getElementById("color-ink").value,
+    card: document.getElementById("color-card").value,
+    muted: document.getElementById("color-muted").value,
+    line: document.getElementById("color-line").value,
+    fontSize: Number(document.getElementById("font-size").value),
+    radius: Number(document.getElementById("radius").value),
+    font: document.getElementById("font-family").value,
+    heading: document.getElementById("heading-font").value,
+    glow: document.getElementById("glow").checked,
+    density: document.getElementById("density").checked ? "compact" : "comfortable",
+  };
+}
+
+function fillThemeForm(theme) {
+  document.getElementById("color-accent").value = theme.accent;
+  document.getElementById("color-bg").value = theme.bg;
+  document.getElementById("color-ink").value = theme.ink;
+  document.getElementById("color-card").value = theme.card;
+  document.getElementById("color-muted").value = theme.muted;
+  document.getElementById("color-line").value = theme.line;
+  document.getElementById("font-size").value = theme.fontSize;
+  document.getElementById("radius").value = theme.radius;
+  document.getElementById("font-family").value = theme.font;
+  document.getElementById("heading-font").value = theme.heading;
+  document.getElementById("glow").checked = theme.glow !== false;
+  document.getElementById("density").checked = theme.density === "compact";
+  document.getElementById("font-size-value").textContent = theme.fontSize;
+  document.getElementById("radius-value").textContent = theme.radius;
+}
+
+function applyTheme(theme) {
+  if (!theme) return;
+  const root = document.documentElement;
+  root.style.setProperty("--bg", theme.bg);
+  root.style.setProperty("--card", theme.card);
+  root.style.setProperty("--ink", theme.ink);
+  root.style.setProperty("--muted", theme.muted);
+  root.style.setProperty("--line", theme.line);
+  root.style.setProperty("--green", theme.accent);
+  root.style.setProperty("--green-ink", inkFor(theme.accent));
+  root.style.setProperty("--radius", theme.radius + "px");
+  root.style.setProperty("--font-size", theme.fontSize + "px");
+  root.style.setProperty("--font", FONTS[theme.font] || FONTS["Segoe UI"]);
+  root.style.setProperty("--heading", FONTS[theme.heading] || FONTS.Palatino);
+  root.style.setProperty("--pad", theme.density === "compact" ? "14px" : "22px");
+  document.body.classList.toggle("glow", theme.glow !== false);
+}
 
 function showAuth() {
   auth.classList.remove("hidden");
@@ -172,11 +373,23 @@ function showAuth() {
 function showApp() {
   auth.classList.add("hidden");
   app.classList.remove("hidden");
-  document.getElementById("who-name").textContent = me.name || me.email;
-  document.getElementById("who-meta").textContent = me.role === "admin" ? "Admin" : "Free plan";
-  document.getElementById("avatar").textContent = (me.name || me.email || "H").slice(0, 1).toUpperCase();
+  document.getElementById("who-name").textContent = me.name || me.username;
+  document.getElementById("who-meta").textContent = me.role === "admin" ? "Admin" : "User";
+  document.getElementById("avatar").textContent = (me.name || me.username || "H").slice(0, 1).toUpperCase();
   document.getElementById("home-role").textContent = me.role === "admin" ? "Admin" : "User";
   document.getElementById("nav-users").classList.toggle("hidden", me.role !== "admin");
+  document.getElementById("theme-form").classList.toggle("hidden", me.role !== "admin");
+  document.getElementById("profile-name").value = me.name || "";
+  document.getElementById("profile-email").value = me.email || "";
+  const quota = workspace && workspace.quota;
+  const quotaText = !quota ? "—" : quota.unlimited ? "Unlimited" : (quota.used + " / " + quota.limit);
+  document.getElementById("home-quota").textContent = quotaText;
+  document.getElementById("side-quota").textContent = quota ? (quota.unlimited ? "Checks today: unlimited" : ("Checks today: " + quota.used + " / " + quota.limit)) : "";
+  if (workspace && workspace.theme) {
+    applyTheme(workspace.theme);
+    fillThemeForm(workspace.theme);
+  }
+  if (workspace && workspace.workspaceLimit != null) document.getElementById("workspace-limit").value = workspace.workspaceLimit;
   loadLists();
 }
 
@@ -184,6 +397,7 @@ async function refresh() {
   const response = await fetch("/api/me");
   const data = await response.json();
   me = data.user;
+  workspace = data.user ? data : null;
   if (!me) showAuth();
   else showApp();
 }
@@ -192,12 +406,11 @@ function setMode(next) {
   mode = next;
   const creating = next === "signup";
   document.getElementById("auth-title").textContent = creating ? "Create an account" : "Sign in";
-  document.getElementById("auth-lede").textContent = creating ? "The first account becomes the admin." : "Use the account you created for this workspace.";
+  document.getElementById("auth-lede").textContent = creating ? "The first account becomes the admin. Email can wait." : "Use the username for this workspace.";
   document.getElementById("auth-submit").textContent = creating ? "Create account" : "Sign in";
   document.getElementById("auth-switch").textContent = creating ? "I already have an account" : "Create an account";
   document.getElementById("name-field").classList.toggle("hidden", !creating);
-  document.getElementById("email-label").textContent = creating ? "Email" : "Username";
-  document.getElementById("email").type = creating ? "email" : "text";
+  document.getElementById("contact-field").classList.toggle("hidden", !creating);
   document.getElementById("password").autocomplete = creating ? "new-password" : "current-password";
 }
 
@@ -211,9 +424,10 @@ document.getElementById("auth-form").addEventListener("submit", async (event) =>
   const error = document.getElementById("auth-error");
   error.textContent = "";
   const payload = {
-    email: document.getElementById("email").value,
+    username: document.getElementById("username").value,
     password: document.getElementById("password").value,
     name: document.getElementById("name").value,
+    contactEmail: document.getElementById("contact-email").value,
   };
   const response = await fetch(mode === "signup" ? "/api/signup" : "/api/login", {
     method: "POST",
@@ -235,20 +449,48 @@ document.getElementById("sign-out").addEventListener("click", async () => {
   showAuth();
 });
 
-document.querySelectorAll("nav button").forEach((button) => {
-  button.addEventListener("click", () => openPage(button.dataset.page));
+document.querySelectorAll("aside nav button[data-page]").forEach((button) => {
+  button.addEventListener("click", () => {
+    if (button.dataset.page === "check") showChecker();
+    else openPage(button.dataset.page);
+  });
 });
+document.getElementById("go-check").addEventListener("click", () => showChecker());
+document.getElementById("new-check").addEventListener("click", () => showChecker());
 
-function openPage(page) {
-  document.querySelectorAll("nav button").forEach((button) => {
+function showChecker(listId) {
+  const frame = document.getElementById("checker-frame");
+  const wanted = "/check?embed=1" + (listId ? "&list=" + encodeURIComponent(listId) : "");
+  const current = frame.getAttribute("src") || "";
+  if (listId || !current) frame.setAttribute("src", wanted);
+  openPage("check", listId || "");
+}
+
+function openPage(page, listId) {
+  document.querySelectorAll("aside nav button[data-page]").forEach((button) => {
     button.classList.toggle("is-on", button.dataset.page === page);
   });
-  ["home", "lists", "users", "settings"].forEach((name) => {
+  ["home", "lists", "check", "users", "settings"].forEach((name) => {
     document.getElementById("page-" + name).classList.toggle("hidden", name !== page);
   });
+  document.body.classList.toggle("is-check", page === "check");
+  const url = new URL(location.href);
+  if (page === "home") url.searchParams.delete("page");
+  else url.searchParams.set("page", page);
+  if (page === "check" && listId) url.searchParams.set("list", listId);
+  else url.searchParams.delete("list");
+  history.replaceState(null, "", url.pathname + url.search);
   if (page === "users") loadUsers();
   if (page === "lists") loadLists();
 }
+
+window.addEventListener("message", (event) => {
+  if (event.origin !== location.origin || !event.data || event.data.type !== "helo-quota") return;
+  const quota = event.data.quota;
+  if (!quota) return;
+  document.getElementById("home-quota").textContent = quota.unlimited ? "Unlimited" : (quota.used + " / " + quota.limit);
+  document.getElementById("side-quota").textContent = quota.unlimited ? "Checks today: unlimited" : ("Checks today: " + quota.used + " / " + quota.limit);
+});
 
 async function loadLists() {
   const response = await fetch("/api/lists");
@@ -261,9 +503,11 @@ async function loadLists() {
   document.getElementById("list-empty").classList.toggle("hidden", lists.length > 0);
   lists.forEach((list) => {
     const row = document.createElement("tr");
-    const open = document.createElement("a");
-    open.href = "/check?list=" + encodeURIComponent(list.id);
+    const open = document.createElement("button");
+    open.className = "texty";
+    open.type = "button";
     open.textContent = "Open";
+    open.addEventListener("click", () => showChecker(list.id));
     const remove = document.createElement("button");
     remove.className = "ghost";
     remove.type = "button";
@@ -287,6 +531,13 @@ async function loadLists() {
   });
 }
 
+function field(value, placeholder) {
+  const input = document.createElement("input");
+  input.value = value || "";
+  if (placeholder) input.placeholder = placeholder;
+  return input;
+}
+
 async function loadUsers() {
   const error = document.getElementById("user-error");
   error.textContent = "";
@@ -296,31 +547,63 @@ async function loadUsers() {
     error.textContent = data.error || "Could not load users.";
     return;
   }
+  if (data.workspaceLimit != null) document.getElementById("workspace-limit").value = data.workspaceLimit;
   const body = document.getElementById("user-body");
   body.replaceChildren();
   (data.users || []).forEach((user) => {
     const row = document.createElement("tr");
-    const joined = new Date(user.created_at).toLocaleDateString();
-    [user.name, user.email, user.role, joined].forEach((value) => {
+    const username = field(user.username);
+    const email = field(user.email, "Not set");
+    email.type = "email";
+    const name = field(user.name);
+    const role = document.createElement("select");
+    ["user", "admin"].forEach((value) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = value === "admin" ? "Admin" : "User";
+      role.append(option);
+    });
+    role.value = user.role;
+    const limit = document.createElement("input");
+    limit.type = "number";
+    limit.min = "0";
+    limit.max = "100000";
+    limit.placeholder = "Default";
+    if (user.dailyLimit != null) limit.value = user.dailyLimit;
+    const today = document.createElement("td");
+    today.textContent = user.role === "admin" ? "Unlimited" : String(user.usedToday || 0);
+    [username, email, name, role, limit].forEach((control) => {
       const cell = document.createElement("td");
-      cell.textContent = value;
+      cell.append(control);
       row.append(cell);
     });
+    row.append(today);
     const action = document.createElement("td");
     const button = document.createElement("button");
     button.className = "ghost";
     button.type = "button";
-    const next = user.role === "admin" ? "user" : "admin";
-    button.textContent = next === "admin" ? "Make admin" : "Make user";
+    button.textContent = "Save";
     button.addEventListener("click", async () => {
+      error.textContent = "";
       const result = await fetch("/api/admin/users/" + user.id, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ role: next }),
+        body: JSON.stringify({
+          username: username.value,
+          email: email.value,
+          name: name.value,
+          role: role.value,
+          dailyLimit: limit.value,
+        }),
       });
       const payload = await result.json();
-      if (!result.ok) error.textContent = payload.error || "Could not change that role.";
-      else loadUsers();
+      if (!result.ok) error.textContent = payload.error || "Could not save that user.";
+      else {
+        error.textContent = "Saved " + payload.user.username + ".";
+        error.classList.add("ok");
+        if (payload.user.id === me.id) await refresh();
+        loadUsers();
+      }
     });
     action.append(button);
     row.append(action);
@@ -328,9 +611,147 @@ async function loadUsers() {
   });
 }
 
+function generatePassword() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz2345679!@$%";
+  const bytes = new Uint8Array(14);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map((byte) => alphabet[byte % alphabet.length]).join("");
+}
+
+document.getElementById("generate-password").addEventListener("click", () => {
+  document.getElementById("new-password").value = generatePassword();
+});
+document.getElementById("copy-password").addEventListener("click", async () => {
+  const value = document.getElementById("new-password").value;
+  const error = document.getElementById("add-user-error");
+  if (!value) {
+    error.textContent = "Generate or type a password first.";
+    error.classList.remove("ok");
+    return;
+  }
+  await navigator.clipboard.writeText(value);
+  error.textContent = "Password copied.";
+  error.classList.add("ok");
+});
+
+document.getElementById("add-user-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const error = document.getElementById("add-user-error");
+  error.classList.remove("ok");
+  error.textContent = "";
+  const password = document.getElementById("new-password").value;
+  const response = await fetch("/api/admin/users", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      username: document.getElementById("new-username").value,
+      name: document.getElementById("new-name").value,
+      email: document.getElementById("new-email").value,
+      role: document.getElementById("new-role").value,
+      dailyLimit: document.getElementById("new-limit").value,
+      password,
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    error.textContent = data.error || "Could not add that user.";
+    return;
+  }
+  error.classList.add("ok");
+  error.textContent = data.user.username + " is ready. Password: " + password;
+  event.target.reset();
+  document.getElementById("new-password").value = password;
+  loadUsers();
+});
+
+document.getElementById("limit-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const error = document.getElementById("limit-error");
+  error.classList.remove("ok");
+  error.textContent = "";
+  const response = await fetch("/api/admin/settings", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ dailyLimit: Number(document.getElementById("workspace-limit").value), theme: workspace.theme }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    error.textContent = data.error || "Could not save the limit.";
+    return;
+  }
+  workspace.workspaceLimit = data.workspaceLimit;
+  error.classList.add("ok");
+  error.textContent = "Normal users can check " + data.workspaceLimit + " names a day.";
+});
+
+document.getElementById("profile-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const error = document.getElementById("profile-error");
+  error.classList.remove("ok");
+  error.textContent = "";
+  const response = await fetch("/api/profile", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      name: document.getElementById("profile-name").value,
+      email: document.getElementById("profile-email").value,
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    error.textContent = data.error || "Could not save your details.";
+    return;
+  }
+  me = data.user;
+  error.classList.add("ok");
+  error.textContent = data.user.email ? "Email saved." : "Email cleared.";
+  showApp();
+});
+
+document.getElementById("presets").innerHTML = Object.entries(PRESETS).map(([name, colors]) =>
+  `<button type="button" class="swatch" data-preset="${name}" style="background:${colors.accent}" aria-label="${name}"></button>`
+).join("");
+document.getElementById("presets").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-preset]");
+  if (!button) return;
+  const current = themeFromForm();
+  fillThemeForm({ ...current, ...PRESETS[button.dataset.preset] });
+  applyTheme(themeFromForm());
+});
+["color-accent", "color-bg", "color-ink", "color-card", "color-muted", "color-line", "font-size", "radius", "font-family", "heading-font", "glow", "density"].forEach((id) => {
+  document.getElementById(id).addEventListener("input", () => {
+    const theme = themeFromForm();
+    document.getElementById("font-size-value").textContent = theme.fontSize;
+    document.getElementById("radius-value").textContent = theme.radius;
+    applyTheme(theme);
+  });
+});
+document.getElementById("theme-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const error = document.getElementById("theme-error");
+  error.classList.remove("ok");
+  error.textContent = "";
+  const theme = themeFromForm();
+  const response = await fetch("/api/admin/settings", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ theme, dailyLimit: workspace.workspaceLimit }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    error.textContent = data.error || "Could not save the appearance.";
+    return;
+  }
+  workspace.theme = data.theme;
+  applyTheme(data.theme);
+  error.classList.add("ok");
+  error.textContent = "Appearance saved for the workspace.";
+});
+
 document.getElementById("password-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const error = document.getElementById("password-error");
+  error.classList.remove("ok");
   error.textContent = "";
   const response = await fetch("/api/password", {
     method: "POST",
@@ -345,12 +766,19 @@ document.getElementById("password-form").addEventListener("submit", async (event
     error.textContent = data.error || "Could not change the password.";
     return;
   }
+  error.classList.add("ok");
   error.textContent = "Password changed.";
   event.target.reset();
 });
 
 setMode("login");
-refresh();
+refresh().then(() => {
+  if (!me) return;
+  const params = new URLSearchParams(location.search);
+  const page = params.get("page");
+  if (page === "check") showChecker(params.get("list") || "");
+  else if (page && document.getElementById("page-" + page)) openPage(page);
+});
 </script>
 </body>
 </html>
