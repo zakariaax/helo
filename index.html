@@ -50,13 +50,12 @@
     box-shadow: var(--shadow); margin-bottom: 16px;
   }
   .recommend strong { color: var(--accent); }
-  .methods { display: grid; grid-template-columns: 1.15fr 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .methods { display: grid; grid-template-columns: 1.15fr 1fr 1fr; gap: 12px; margin: 18px 0 16px; }
   .card {
     background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px 16px;
     box-shadow: var(--shadow);
   }
   .card.best { border-color: #b7d7c4; background: linear-gradient(180deg, #f5fbf7, var(--card) 48px); }
-  .kicker { margin: 0 0 4px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
   .card h2 { margin: 0 0 8px; font-size: 22px; }
   .card p, .recommend p { margin: 0; color: var(--muted); }
   .card p + p { margin-top: 8px; }
@@ -163,7 +162,9 @@
   .status-panel { max-height: 280px; overflow: auto; }
   .status-panel .chips { max-width: none; }
   .legend { color: var(--muted); font-size: 13px; margin: 8px 2px 0; }
-  .pager { display: flex; gap: 10px; align-items: center; padding: 12px; }
+  .pager { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 4px 0 12px; }
+  .table-card > .pager { padding: 12px; }
+  .pager-label { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
   .banner .ghost, .banner .primary { margin-left: 8px; }
   .footer-note { color: var(--muted); font-size: 13px; margin-top: 18px; }
   code { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 0.92em; }
@@ -188,27 +189,6 @@
 
   <section class="recommend">
     <p><strong>Best free method: public RDAP.</strong> It is the registry’s own directory over HTTPS, with a clear found or not-found answer. DNS is the fallback when a TLD has no RDAP server, and also when that registry cannot be reached from the browser. Classic WHOIS is free but the wording is too inconsistent to trust for a bulk yes or no.</p>
-  </section>
-
-  <section class="methods" aria-label="How the three lookup methods compare">
-    <article class="card best">
-      <p class="kicker">Use this</p>
-      <h2>RDAP</h2>
-      <p>IANA publishes which HTTPS server to ask for each TLD. HTTP 200 means the registry has the domain. HTTP 404 means it does not. That is the strongest free signal.</p>
-      <p>Owner contacts are often privacy-redacted. Redaction does not change the found / not-found answer. A not-found name can still be premium, reserved, or blocked at the moment you try to buy it.</p>
-    </article>
-    <article class="card">
-      <p class="kicker">Hint only</p>
-      <h2>DNS</h2>
-      <p>NXDOMAIN means the public DNS has no such name. That usually means unregistered, but a registered domain with no nameservers looks the same. Some TLDs answer for every name, so DNS says taken when it is not a normal registration.</p>
-      <p>This app uses DNS when IANA lists no RDAP server, and when the registry server does not answer the browser. Many registries block browser requests, which is why a full scan used to show a lot of unknowns. Those chips are labeled DNS. Availability from DNS is low confidence.</p>
-    </article>
-    <article class="card">
-      <p class="kicker">Skip for bulk</p>
-      <h2>WHOIS</h2>
-      <p>Port 43 WHOIS needs no key, but every registry writes a different paragraph. “Available”, “not found”, and “no match” are not safe to parse, and bulk queries get cut off.</p>
-      <p>Privacy redaction hides contact data you do not need for this job. This app does not query WHOIS.</p>
-    </article>
   </section>
 
   <div id="banner"></div>
@@ -278,10 +258,11 @@
       <option value="registered">Has registered</option>
       <option value="unknown">Has unknown</option>
     </select>
-    <button class="ghost" id="export" type="button">Export CSV</button>
+    <button class="ghost" id="export" type="button">Export report</button>
   </div>
   <div class="stats" id="stats" hidden></div>
   <div id="skipped"></div>
+  <div class="pager" id="pager-top" hidden></div>
 
   <section class="card table-card" id="table-card">
     <div class="empty" id="empty">Results show up here after a check. Names with the most registered TLDs rise to the top. Click a red, green, or amber count to list those extensions. Click a name for the full per-extension detail.</div>
@@ -298,9 +279,26 @@
       </thead>
       <tbody id="tbody"></tbody>
     </table>
-    <div class="pager" id="pager" hidden></div>
+    <div class="pager" id="pager-bottom" hidden></div>
   </section>
   <p class="legend" id="legend" hidden>Red is taken, green looks available, amber is unknown. Click a count to list those extensions. A failed lookup stays unknown and is never called available. RDAP availability is high confidence. DNS availability is a hint.</p>
+  <section class="methods" aria-label="How the lookup methods compare">
+    <article class="card best">
+      <h2>RDAP</h2>
+      <p>IANA publishes which HTTPS server to ask for each TLD. HTTP 200 means the registry has the domain. HTTP 404 means it does not. That is the strongest free signal.</p>
+      <p>Owner contacts are often privacy-redacted. Redaction does not change the found / not-found answer. A not-found name can still be premium, reserved, or blocked at the moment you try to buy it.</p>
+    </article>
+    <article class="card">
+      <h2>DNS</h2>
+      <p>NXDOMAIN means the public DNS has no such name. That usually means unregistered, but a registered domain with no nameservers looks the same. Some TLDs answer for every name, so DNS says taken when it is not a normal registration.</p>
+      <p>This app uses DNS when IANA lists no RDAP server, and when the registry server does not answer the browser. Many registries block browser requests, which is why a full scan used to show a lot of unknowns. Those chips are labeled DNS. Availability from DNS is low confidence.</p>
+    </article>
+    <article class="card">
+      <h2>WHOIS</h2>
+      <p>Port 43 WHOIS needs no key, but every registry writes a different paragraph. “Available”, “not found”, and “no match” are not safe to parse, and bulk queries get cut off.</p>
+      <p>Privacy redaction hides contact data you do not need for this job. This app does not query WHOIS.</p>
+    </article>
+  </section>
   <p class="footer-note" id="footer-note">Nothing is uploaded to an account. A check asks IANA for the RDAP server list, then the registry for each RDAP TLD. If the registry cannot be reached, it asks Cloudflare or Google DNS-over-HTTPS and labels that as a DNS hint. Answers stay in this browser tab until you close it. Names are checked together, with a cap per registry so one slow server does not stall the rest.</p>
 </div>
 <script src="browser-check.js"></script>
@@ -353,6 +351,8 @@ const state = {
   etaMs: null,
   etaRough: true,
   page: 0,
+  showAll: false,
+  mode: "scan",
   elapsedMs: 0,
   segmentStart: 0,
 };
@@ -722,6 +722,7 @@ function renderTable() {
     table.hidden = true;
     empty.hidden = false;
     legend.hidden = true;
+    renderPager(0);
     return;
   }
   table.hidden = false;
@@ -737,7 +738,7 @@ function renderTable() {
   tbody.replaceChildren();
   const rows = visibleNames();
   renderPager(rows.length);
-  const pageRows = rows.slice(state.page * PAGE_SIZE, (state.page + 1) * PAGE_SIZE);
+  const pageRows = state.showAll ? rows : rows.slice(state.page * PAGE_SIZE, (state.page + 1) * PAGE_SIZE);
   if (!rows.length) {
     const tr = el("tr");
     const td = el("td", null, "No names match this filter.");
@@ -834,6 +835,7 @@ function formatDuration(ms) {
 
 const HOUR_LOOKUPS = 780000;
 const PAGE_SIZE = 40;
+const SPOTLIGHT = ["com", "ai", "io", "co", "app", "dev", "net", "org", "xyz", "me", "uk", "de"];
 let clockTimer = 0;
 
 function elapsedNow() {
@@ -867,29 +869,55 @@ function endSegment() {
   paintElapsed();
 }
 
+function goToPage(nextPage) {
+  state.page = nextPage;
+  state.showAll = false;
+  renderTable();
+  const card = document.getElementById("table-card");
+  if (card) card.scrollIntoView({ block: "start" });
+}
+
 function renderPager(total) {
-  const pager = document.getElementById("pager");
-  const pages = Math.ceil(total / PAGE_SIZE);
-  if (!pager) return;
-  if (pages <= 1) {
-    pager.hidden = true;
-    pager.replaceChildren();
-    return;
-  }
+  const bars = [document.getElementById("pager-top"), document.getElementById("pager-bottom")];
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   if (state.page >= pages) state.page = pages - 1;
   if (state.page < 0) state.page = 0;
-  pager.hidden = false;
-  pager.replaceChildren();
-  const prev = el("button", "ghost", "Previous");
-  prev.type = "button";
-  prev.disabled = state.page === 0;
-  prev.addEventListener("click", () => { state.page -= 1; renderTable(); });
-  const next = el("button", "ghost", "Next");
-  next.type = "button";
-  next.disabled = state.page >= pages - 1;
-  next.addEventListener("click", () => { state.page += 1; renderTable(); });
-  const label = el("span", null, (state.page + 1) + " / " + pages);
-  pager.append(prev, label, next);
+  const visible = state.started && total > PAGE_SIZE;
+  bars.forEach((pager) => {
+    if (!pager) return;
+    pager.replaceChildren();
+    if (!visible) {
+      pager.hidden = true;
+      return;
+    }
+    pager.hidden = false;
+    if (state.showAll) {
+      pager.append(el("span", "pager-label", "Showing all " + total.toLocaleString() + " names"));
+      const paged = el("button", "ghost", "Show " + PAGE_SIZE + " per page");
+      paged.type = "button";
+      paged.addEventListener("click", () => goToPage(0));
+      pager.append(paged);
+      return;
+    }
+    const start = state.page * PAGE_SIZE + 1;
+    const end = Math.min(total, (state.page + 1) * PAGE_SIZE);
+    pager.append(el("span", "pager-label", "Showing " + start.toLocaleString() + "–" + end.toLocaleString() + " of " + total.toLocaleString()));
+    const prev = el("button", "ghost", "Previous");
+    prev.type = "button";
+    prev.disabled = state.page === 0;
+    prev.addEventListener("click", () => goToPage(state.page - 1));
+    const next = el("button", "ghost", "Next");
+    next.type = "button";
+    next.disabled = state.page >= pages - 1;
+    next.addEventListener("click", () => goToPage(state.page + 1));
+    const all = el("button", "ghost", "Show all names");
+    all.type = "button";
+    all.addEventListener("click", () => {
+      state.showAll = true;
+      renderTable();
+    });
+    pager.append(prev, next, all);
+  });
 }
 
 function trimTlds(keep) {
@@ -938,10 +966,33 @@ function renderProgress() {
   const totalNames = state.names.length;
   const label = document.getElementById("progress-label");
   const detail = document.getElementById("progress-detail");
+  paintElapsed();
+  if (state.mode === "recheck") {
+    const done = state.runDone;
+    const total = state.runTotal;
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    document.getElementById("progress-bar").style.width = pct + "%";
+    label.textContent = "Rechecking unknowns";
+    const still = state.names.reduce((sum, name) => sum + metrics(name).unknown, 0);
+    if (!state.running && done >= total) {
+      etaEl.textContent = "";
+      const rechecked = total.toLocaleString() + " unknown" + (total === 1 ? "" : "s");
+      const left = still ? still.toLocaleString() + " still unknown" : "None left";
+      detail.textContent = total ? "Rechecked " + rechecked + ". " + left : "No unknowns to recheck";
+    } else if (state.running) {
+      etaEl.textContent = etaPhrase();
+      detail.textContent = "Rechecking unknowns · " + done.toLocaleString() + " / " + total.toLocaleString();
+    } else {
+      etaEl.textContent = "";
+      detail.textContent = "Recheck stopped at " + done.toLocaleString() + " / " + total.toLocaleString();
+    }
+    syncContinue();
+    document.title = state.running ? "Rechecking unknowns · Bulk TLD checker" : "Bulk TLD checker";
+    return;
+  }
   const pct = state.lookupsTotal ? Math.round((state.lookupsDone / state.lookupsTotal) * 100) : 0;
   document.getElementById("progress-bar").style.width = pct + "%";
   label.textContent = namesDone + " / " + totalNames + " names";
-  paintElapsed();
   if (!state.running && state.lookupsDone >= state.lookupsTotal) {
     etaEl.textContent = "";
     detail.textContent = state.lookupsTotal ? "Finished " + state.lookupsDone.toLocaleString() + " lookups" : "Nothing to look up";
@@ -974,7 +1025,10 @@ function renderStats() {
     unknown += counts.unknown;
   });
   state.hasUnknown = unknown > 0;
-  document.getElementById("recheck").hidden = !state.hasUnknown;
+  const recheckBtn = document.getElementById("recheck");
+  recheckBtn.hidden = !state.hasUnknown && !(state.mode === "recheck" && state.running);
+  recheckBtn.disabled = !!state.running;
+  recheckBtn.textContent = state.running && state.mode === "recheck" ? "Rechecking…" : "Recheck unknowns";
   box.replaceChildren();
   [["Names", state.names.length, ""], ["Registered", registered, "taken-ink"], ["Available", available, "free-ink"], ["Unknown", unknown, "unk-ink"]].forEach(([label, value, klass]) => {
     const pill = el("span", "pill");
@@ -1079,6 +1133,8 @@ async function readError(response) {
 async function runCheck(mode) {
   if (state.running) return;
   const fresh = mode === "unknowns";
+  if (mode === "unknowns") state.mode = "recheck";
+  else if (mode !== "continue") state.mode = "scan";
   showBanner("");
   state.controller = new AbortController();
   document.getElementById("check").disabled = true;
@@ -1125,6 +1181,9 @@ async function runCheck(mode) {
     document.getElementById("check").disabled = false;
     document.getElementById("check").textContent = "Check";
     document.getElementById("stop").hidden = true;
+    const recheckBtn = document.getElementById("recheck");
+    recheckBtn.disabled = false;
+    recheckBtn.textContent = "Recheck unknowns";
     syncContinue();
     return;
   }
@@ -1165,11 +1224,17 @@ async function runCheck(mode) {
   state.currentName = pending ? pending.display : "";
   render();
   if (!needed.length) {
+    if (state.mode === "recheck") showBanner("No unknowns are left to recheck.", false);
     finishRun(true);
     return;
   }
-  document.getElementById("check").textContent = "Checking…";
+  document.getElementById("check").textContent = state.mode === "recheck" ? "Rechecking…" : "Checking…";
   beginSegment();
+  if (state.mode === "recheck") {
+    const noun = needed.length === 1 ? "unknown lookup" : "unknown lookups";
+    showBanner("Rechecking " + needed.length.toLocaleString() + " " + noun + ".", false);
+    document.getElementById("progress-card").scrollIntoView({ block: "center" });
+  }
   try {
     if (state.hosted && window.TldBrowser) {
       await TldBrowser.checkAll(needed, {
@@ -1236,27 +1301,157 @@ function finishRun(keepResults) {
   document.getElementById("check").disabled = false;
   document.getElementById("check").textContent = "Check";
   document.getElementById("stop").hidden = true;
+  const recheckBtn = document.getElementById("recheck");
+  recheckBtn.disabled = false;
+  recheckBtn.textContent = "Recheck unknowns";
   syncContinue();
+  if (keepResults && state.mode === "recheck" && state.runTotal && state.runDone >= state.runTotal) {
+    const still = state.names.reduce((sum, name) => sum + metrics(name).unknown, 0);
+    showBanner(still
+      ? "Recheck finished. " + still.toLocaleString() + (still === 1 ? " is still unknown." : " are still unknown.")
+      : "Recheck finished. Nothing is still unknown.", false);
+  }
   if (keepResults) scheduleRender();
 }
 
-function rowsForExport() {
-  return visibleNames().map((name) => {
-    const counts = metrics(name);
-    const format = (status) => resultList(name, status).map((hit) => (hit.tldDisplay || hit.tld) + " (" + (hit.method === "rdap" ? "RDAP" : "DNS") + ")").join("; ");
-    return [name.display, name.ascii, counts.registered, counts.available, counts.unknown, format("registered"), format("available"), format("unknown")];
+function presetTokens(id) {
+  return (state.presetText[id] || "").split(/[\s,;]+/).map((item) => item.trim().toLowerCase()).filter(Boolean);
+}
+
+function lookupStatus(name, tld) {
+  const hit = state.results.get(cacheKey(name.ascii, tld));
+  if (!hit) return "Not checked";
+  if (hit.status === "registered") return "Taken";
+  if (hit.status === "available") return "Free";
+  return "Unknown";
+}
+
+function groupScore(name, tlds) {
+  const score = { taken: 0, free: 0, unknown: 0, checked: 0, total: tlds.length, takenNames: [] };
+  tlds.forEach((tld) => {
+    const word = lookupStatus(name, tld);
+    if (word === "Not checked") return;
+    score.checked += 1;
+    if (word === "Taken") {
+      score.taken += 1;
+      score.takenNames.push(tld);
+    } else if (word === "Free") score.free += 1;
+    else score.unknown += 1;
+  });
+  return score;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+}
+
+function reportNames() {
+  return state.names.slice().sort((a, b) => {
+    const delta = metrics(b).registered - metrics(a).registered;
+    if (delta) return delta;
+    return a.display.localeCompare(b.display);
   });
 }
 
-function exportCsv() {
-  const header = ["name", "ascii_name", "registered", "available", "unknown", "taken_tlds", "available_tlds", "unknown_tlds"];
-  const lines = [header].concat(rowsForExport()).map((row) => row.map(csvEscape).join(","));
-  const blob = new Blob([lines.join("\n") + "\n"], { type: "text/csv;charset=utf-8" });
-  const link = el("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = "tld-check.csv";
-  link.click();
-  URL.revokeObjectURL(link.href);
+function summaryCsv() {
+  const launch = presetTokens("launch");
+  const famous = presetTokens("famous");
+  const countries = presetTokens("countries");
+  const notes = [
+    ["What this file is", "One row per name. Taken means registered. Free means the check found no registration. Unknown means the lookup did not answer, so it is not called free."],
+    ["Launch", "Launch is the short list of " + launch.length + " extensions worth buying for a new product. Launch taken is how many of that list are already registered. The list is: " + launch.join(" ")],
+    ["Famous", "Famous is the " + famous.length + " largest zones, ranked by how many domains are registered in each. Famous taken is how many of that list are already registered."],
+    ["Countries", "Countries is the " + countries.length + " largest country-code extensions. Countries taken is how many of that list are already registered."],
+    ["Free", "RDAP free is the registry’s own answer. DNS free is only a hint, because a registered name with no nameservers can look the same."],
+  ];
+  const header = ["Name", "Taken", "Free", "Unknown", "Launch taken", "Launch list size", "Launch checked", "Launch taken names", "Famous taken", "Famous list size", "Famous checked", "Countries taken", "Countries list size", "Countries checked"]
+    .concat(SPOTLIGHT.map((tld) => "." + tld));
+  const lines = notes.map((row) => row.map(csvEscape).join(","));
+  lines.push(header.map(csvEscape).join(","));
+  reportNames().forEach((name) => {
+    const counts = metrics(name);
+    const launchScore = groupScore(name, launch);
+    const famousScore = groupScore(name, famous);
+    const countryScore = groupScore(name, countries);
+    const row = [
+      name.display, counts.registered, counts.available, counts.unknown,
+      launchScore.taken, launchScore.total, launchScore.checked, launchScore.takenNames.join(" "),
+      famousScore.taken, famousScore.total, famousScore.checked,
+      countryScore.taken, countryScore.total, countryScore.checked,
+    ].concat(SPOTLIGHT.map((tld) => lookupStatus(name, tld)));
+    lines.push(row.map(csvEscape).join(","));
+  });
+  return lines.join("\n") + "\n";
+}
+
+function groupPhrase(score) {
+  if (!score.total) return "List not loaded";
+  if (score.checked < score.total) return score.taken + " taken · " + score.checked + " of " + score.total + " checked";
+  return score.taken + " of " + score.total + " taken";
+}
+
+function buildReportHtml() {
+  const launch = presetTokens("launch");
+  const famous = presetTokens("famous");
+  const countries = presetTokens("countries");
+  const names = reportNames();
+  const rows = names.map((name) => {
+    const counts = metrics(name);
+    const launchScore = groupScore(name, launch);
+    const famousScore = groupScore(name, famous);
+    const countryScore = groupScore(name, countries);
+    const spots = SPOTLIGHT.map((tld) => {
+      const word = lookupStatus(name, tld);
+      const klass = word === "Taken" ? "taken" : word === "Free" ? "free" : word === "Unknown" ? "unknown" : "miss";
+      return "<td class=\"" + klass + "\">" + escapeHtml(word) + "</td>";
+    }).join("");
+    return "<tr><td class=\"name\">" + escapeHtml(name.display) + "</td><td class=\"num taken\">" + counts.registered + "</td><td class=\"num free\">" + counts.available + "</td><td class=\"num unknown\">" + counts.unknown + "</td><td>" + escapeHtml(groupPhrase(launchScore)) + "</td><td>" + escapeHtml(groupPhrase(famousScore)) + "</td><td>" + escapeHtml(groupPhrase(countryScore)) + "</td>" + spots + "</tr>";
+  }).join("");
+  const spotHead = SPOTLIGHT.map((tld) => "<th>." + escapeHtml(tld) + "</th>").join("");
+  const when = new Date().toLocaleString();
+  const sheet = summaryCsv();
+  return "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>TLD check report</title><style>"
+    + "body{margin:0;background:#f6f1ea;color:#1e1a16;font:15px/1.45 'Segoe UI',Helvetica,sans-serif}"
+    + "main{width:min(1280px,calc(100% - 32px));margin:0 auto;padding:28px 0 64px}"
+    + "h1{font:600 32px Palatino,Georgia,serif;margin:0 0 6px} h2{font:600 22px Palatino,Georgia,serif;margin:28px 0 8px}"
+    + "p{margin:0 0 8px;color:#5f574e} .actions{display:flex;gap:8px;margin:16px 0}"
+    + "button{font:inherit;border-radius:999px;padding:8px 14px;border:1px solid #e4d9cb;background:#fffdf8;cursor:pointer}"
+    + "button.primary{background:#1b4f3a;color:#f4faf6;border-color:transparent;font-weight:700}"
+    + "table{width:100%;border-collapse:collapse;background:#fffdf8;border-radius:12px;overflow:hidden}"
+    + "th,td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid #e4d9cb;font-size:13px}"
+    + "th{font-size:12px;color:#5f574e} td.num{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}"
+    + "td.name{font-weight:700} .taken{color:#9c3418} .free{color:#0e6a3b} .unknown{color:#8a5a0d} .miss{color:#8a8176}"
+    + "@media print{body{background:#fff}.actions{display:none}}"
+    + "</style></head><body><main>"
+    + "<h1>TLD check report</h1><p>" + escapeHtml(when) + " · " + names.length + " names in this view.</p>"
+    + "<div class=\"actions\"><button class=\"primary\" id=\"print-btn\" type=\"button\">Print or save as PDF</button><button id=\"sheet-btn\" type=\"button\">Download spreadsheet</button></div>"
+    + "<h2>What the numbers mean</h2>"
+    + "<p><strong>Launch (" + launch.length + ")</strong> is the short list worth buying for a new product. “12 taken of " + launch.length + "” means 12 of those extensions are already registered. The list is: " + escapeHtml(launch.join(", ") || "not loaded") + ".</p>"
+    + "<p><strong>Famous (" + famous.length + ")</strong> is the largest zones, ranked by how many domains are registered in each. The number is how many of that list are already taken for the name.</p>"
+    + "<p><strong>Countries (" + countries.length + ")</strong> is the largest country-code extensions. The number is how many of that list are already taken.</p>"
+    + "<p><strong>Taken</strong> means registered. <strong>Free</strong> means the check found no registration. A free RDAP answer comes from the registry. A free DNS answer is only a hint. <strong>Unknown</strong> means the lookup did not answer, so it is not called free. <strong>Not checked</strong> means that extension was not in this scan.</p>"
+    + "<h2>Each name</h2><div style=\"overflow:auto\"><table><thead><tr><th>Name</th><th>Taken</th><th>Free</th><th>Unknown</th><th>Launch</th><th>Famous</th><th>Countries</th>" + spotHead + "</tr></thead><tbody>"
+    + rows + "</tbody></table></div>"
+    + "<textarea id=\"sheet\" hidden>" + escapeHtml(sheet) + "</textarea>"
+    + "<" + "script>document.getElementById('print-btn').onclick=function(){print()};document.getElementById('sheet-btn').onclick=function(){var text=document.getElementById('sheet').value;var blob=new Blob([text],{type:'text/csv;charset=utf-8'});var link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download='tld-summary.csv';link.click();};</" + "script>"
+    + "</main></body></html>";
+}
+
+function exportReport() {
+  if (!state.started || !state.names.length) {
+    showBanner("Run a check first, then export the report.", true);
+    return;
+  }
+  const blob = new Blob([buildReportHtml()], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const opened = window.open(url, "_blank");
+  if (!opened) {
+    const link = el("a");
+    link.href = url;
+    link.download = "tld-report.html";
+    link.click();
+    showBanner("The report downloaded as tld-report.html. Open it in the browser, then use Print or save as PDF.", false);
+  }
 }
 
 function csvEscape(value) {
@@ -1279,10 +1474,24 @@ document.querySelectorAll(".preset").forEach((button) => {
   button.addEventListener("click", () => applyPreset(button.dataset.preset));
 });
 document.getElementById("recheck").addEventListener("click", () => {
+  let removed = 0;
   Object.keys(cache).forEach((key) => {
-    if (cache[key] && cache[key].status === "unknown") delete cache[key];
+    if (cache[key] && cache[key].status === "unknown") {
+      delete cache[key];
+      removed += 1;
+    }
   });
-  sessionStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+  cacheCount = Math.max(0, cacheCount - removed);
+  scheduleCacheFlush();
+  const button = document.getElementById("recheck");
+  button.disabled = true;
+  button.textContent = "Rechecking…";
+  const detail = document.getElementById("progress-detail");
+  detail.textContent = "Rechecking unknowns…";
+  document.getElementById("progress-label").textContent = "Rechecking unknowns";
+  document.getElementById("progress-bar").style.width = "0%";
+  document.getElementById("progress-card").hidden = false;
+  document.getElementById("progress-card").scrollIntoView({ block: "center" });
   runCheck("unknowns");
 });
 document.getElementById("clear-cache").addEventListener("click", () => {
@@ -1290,7 +1499,7 @@ document.getElementById("clear-cache").addEventListener("click", () => {
   sessionStorage.removeItem(CACHE_KEY);
   showBanner("Cleared results remembered in this tab.", false);
 });
-document.getElementById("export").addEventListener("click", exportCsv);
+document.getElementById("export").addEventListener("click", exportReport);
 document.getElementById("search").addEventListener("input", () => { state.page = 0; scheduleRender(); });
 document.getElementById("filter").addEventListener("change", () => { state.page = 0; scheduleRender(); });
 document.querySelectorAll("thead button").forEach((button) => {

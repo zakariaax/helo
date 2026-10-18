@@ -24,7 +24,8 @@ DNS is only a hint. A registered domain with no nameservers can look free (NXDOM
 4. For a TLD with no RDAP server, it asks Cloudflare DNS-over-HTTPS, then Google DNS-over-HTTPS, for an NXDOMAIN versus existing records. The local resolver is used only if those are unreachable.
 5. If the registry does not answer (timeout, browser block, or rate limit), the same DNS hint is used and the chip says DNS. RDAP 200 and RDAP 404 stay authoritative. If DNS also fails, the result stays unknown.
 6. The progress line shows a rough time-left estimate as soon as you click Check, then replaces it with an estimate from the recent pace. **Stop** pauses the scan and keeps every answer already on screen. **Continue scanning** finishes the lookups that have not come back yet. A registry that fails to answer twice is skipped for the rest of the tab and checked with DNS instead, so one quiet server cannot stall the scan.
-7. Finished answers are remembered in this browser tab, so a repeat check does not ask again. Unknowns are remembered too; use **Recheck unknowns** to try those again. **Clear tab cache** forgets everything stored in the tab. Click a registered, available, or unknown count to list those extensions.
+7. Finished answers are remembered in this browser tab, so a repeat check does not ask again. Unknowns are remembered too; use **Recheck unknowns** to try those again. The progress card counts just that recheck. **Clear tab cache** forgets everything stored in the tab. Click a registered, available, or unknown count to list those extensions. Long result lists page 40 names at a time, with the same Previous / Next controls above and below the table, plus **Show all names**.
+8. **Export report** opens a readable summary: taken, free, and unknown counts, how many of the Launch, Famous, and Countries lists are taken, and whether .com, .ai, .io, and the other spotlight extensions are taken. The report explains what those lists are and can be printed or saved as a PDF. Its spreadsheet download is one short row per name.
 
 The TLD box starts with every extension in the IANA root (largest zones first). Four sets sit above it:
 
@@ -33,7 +34,7 @@ The TLD box starts with every extension in the IANA root (largest zones first). 
 - **Launch** — the short list worth buying for a new product.
 - **Countries** — the 80 largest country-code extensions.
 
-You can still edit or paste your own list. Up to 20,000 names per run. About 100 names across every extension is meant to finish inside an hour. For thousands of names, use Launch or Countries. A list that would take many hours offers to keep the largest extensions so the run stays about an hour. The progress card shows elapsed time next to the time left. Registries that answer quickly are checked with RDAP. A registry that fails twice in the same tab is checked with DNS for the rest of that tab.
+You can still edit or paste your own list. Up to 20,000 names per run. About 100 names across every extension is meant to finish inside an hour. For thousands of names, use Launch or Countries. A list that would take many hours offers to keep the largest extensions so the run stays about an hour. The progress card shows elapsed time next to the time left. Export report explains the Launch, Famous, and Countries counts instead of one long cell per name. Registries that answer quickly are checked with RDAP. A registry that fails twice in the same tab is checked with DNS for the rest of that tab.
 
 ## Setup
 
