@@ -46,6 +46,7 @@ async function handleApi(request, env, url) {
 
   if (request.method === "POST" && path === "/api/profile") return updateProfile(request, env, user);
   if (request.method === "POST" && path === "/api/usage") return reserveUsage(request, env, user);
+  if (request.method === "POST" && path === "/api/site") return siteStatus(request, env, user);
   if (request.method === "GET" && path === "/api/lists") return listLists(env, user);
   if (request.method === "POST" && path === "/api/lists") return createList(request, env, user);
   const listMatch = path.match(/^\/api\/lists\/([0-9a-f-]{36})$/);
@@ -158,22 +159,261 @@ async function reserveUsage(request, env, user) {
   const body = await readBody(request);
   const count = Math.floor(Number(body.count));
   if (!Number.isFinite(count) || count < 1 || count > 20000) return json({ error: "That check size is not valid." }, 400);
+  const charged = await chargeUsage(env, user, count);
+  if (!charged.ok) return json(charged.body, charged.status);
+  return json(charged.quota);
+}
+
+async function chargeUsage(env, user, count) {
   const settings = await getSettings(env);
   const quota = await quotaFor(env, user, settings.dailyLimit);
-  if (quota.unlimited) return json({ ...quota, reserved: count });
+  if (quota.unlimited) return { ok: true, quota: { ...quota, reserved: count } };
   if (quota.used + count > quota.limit) {
-    return json({
-      error: "Daily limit reached. " + quota.used + " of " + quota.limit + " name checks used today.",
-      ...quota,
-    }, 429);
+    return {
+      ok: false,
+      status: 429,
+      body: {
+        error: "Daily limit reached. " + quota.used + " of " + quota.limit + " name checks used today.",
+        ...quota,
+      },
+    };
   }
-  const day = utcDay();
   await env.DB.prepare(
     `INSERT INTO usage_days (user_id, day, checks) VALUES (?, ?, ?)
      ON CONFLICT(user_id, day) DO UPDATE SET checks = checks + excluded.checks`
-  ).bind(user.id, day, count).run();
+  ).bind(user.id, utcDay(), count).run();
   const next = await quotaFor(env, user, settings.dailyLimit);
-  return json({ ...next, reserved: count });
+  return { ok: true, quota: { ...next, reserved: count } };
+}
+
+const PARK_NS = [
+  "sedoparking.com", "sedo.com", "dan.com", "afternic.com", "afternicdns.com", "bodis.com",
+  "parkingcrew.net", "above.com", "cashparking.com", "hugedomains.com", "undeveloped.com",
+  "namebright.com", "smartname.com", "dsredirection.com", "fastpark.net", "parklogic.com",
+  "skenzo.com", "internettraffic.com", "rookdns.com", "namedrive.com", "domainnamesales.com",
+  "uniregistrymarket.link", "dnsparking.com", "parkingpage.com", "sav.com", "buydomains.com",
+];
+const SALE_HOSTS = [
+  "dan.com", "sedo.com", "afternic.com", "hugedomains.com", "undeveloped.com", "atom.com",
+  "bodis.com", "above.com", "buydomains.com", "domainmarket.com", "namebright.com", "sav.com",
+];
+const SALE_PHRASES = [
+  "domain for sale", "this domain is for sale", "domain name for sale", "buy this domain",
+  "domain may be for sale", "this domain may be for sale", "purchase this domain",
+  "inquire about this domain", "this webpage is parked", "domain is parked",
+  "parked free, courtesy of godaddy", "is available for purchase",
+];
+const SITE_UA = "Mozilla/5.0 (compatible; HeloSiteCheck/1.0)";
+let rdapDirectory = null;
+let rdapDirectoryAt = 0;
+
+async function siteStatus(request, env, user) {
+  const body = await readBody(request);
+  const domain = cleanDomain(body.domain);
+  if (!domain) return json({ error: "Write a domain like example.com." }, 400);
+  const charged = await chargeUsage(env, user, 1);
+  if (!charged.ok) return json(charged.body, charged.status);
+  try {
+    const result = await inspectDomain(domain);
+    return json({ ...result, quota: charged.quota });
+  } catch (error) {
+    return json({
+      domain,
+      tld: extensionOf(domain),
+      registered: null,
+      kind: "unknown",
+      detail: "The check did not finish.",
+      sale: "",
+      quota: charged.quota,
+    });
+  }
+}
+
+async function inspectDomain(domain) {
+  const tld = extensionOf(domain);
+  const registered = await registrationStatus(domain);
+  const dns = await websiteDns(domain);
+  const page = registered === false ? null : await openHome(domain);
+  const judged = classifySite({ registered, dns, page });
+  return { domain, tld, registered, kind: judged.kind, detail: judged.detail, sale: judged.sale || "" };
+}
+
+function classifySite({ registered, dns, page }) {
+  if (registered === false) return { kind: "available", detail: "The registry has no record of this domain." };
+  const salePage = page && page.sale;
+  if (salePage || (dns.parked && !(page && page.live))) {
+    const where = salePage || dns.parkedName || "a for-sale host";
+    return { kind: "for-sale", sale: where, detail: "Registered, and the page is for sale (" + where + ")." };
+  }
+  if (page && page.live) {
+    return {
+      kind: "live",
+      detail: registered === true ? "Registered, and a website answered." : "A website answered. The registry did not confirm the name.",
+    };
+  }
+  if (registered === true) {
+    return {
+      kind: "offline",
+      detail: dns.hasAddress ? "Registered, but the site did not open." : "Registered, with no website address.",
+    };
+  }
+  return { kind: "unknown", detail: "The registry and the site did not give a clear answer." };
+}
+
+async function registrationStatus(domain) {
+  const directory = await rdapBootstrap();
+  const base = directory ? rdapBaseFor(directory, domain) : "";
+  if (!base) return null;
+  try {
+    const response = await fetch(base.replace(/\/$/, "") + "/domain/" + domain, {
+      headers: { accept: "application/rdap+json, application/json" },
+      signal: AbortSignal.timeout(5000),
+      redirect: "follow",
+    });
+    if (response.status === 404) return false;
+    if (response.status === 200) return true;
+  } catch (error) {
+    return null;
+  }
+  return null;
+}
+
+async function rdapBootstrap() {
+  if (rdapDirectory && Date.now() - rdapDirectoryAt < 6 * 60 * 60 * 1000) return rdapDirectory;
+  try {
+    const response = await fetch("https://data.iana.org/rdap/dns.json", {
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) return rdapDirectory;
+    rdapDirectory = await response.json();
+    rdapDirectoryAt = Date.now();
+  } catch (error) {
+    return rdapDirectory;
+  }
+  return rdapDirectory;
+}
+
+function rdapBaseFor(directory, domain) {
+  let best = "";
+  let bestLen = -1;
+  for (const service of directory.services || []) {
+    const names = service[0] || [];
+    const urls = service[1] || [];
+    for (const name of names) {
+      const suffix = String(name || "").toLowerCase();
+      if ((domain === suffix || domain.endsWith("." + suffix)) && suffix.length > bestLen && urls[0]) {
+        best = urls[0];
+        bestLen = suffix.length;
+      }
+    }
+  }
+  return best;
+}
+
+async function websiteDns(domain) {
+  const [address, quadA, cname, names] = await Promise.all([
+    dnsAnswers(domain, "A"),
+    dnsAnswers(domain, "AAAA"),
+    dnsAnswers(domain, "CNAME"),
+    dnsAnswers(domain, "NS"),
+  ]);
+  const parkedName = names.map((row) => String(row.data || "").replace(/\.$/, "").toLowerCase()).find((host) => hostMatches(host, PARK_NS)) || "";
+  return {
+    hasAddress: address.length + quadA.length + cname.length > 0,
+    parked: Boolean(parkedName),
+    parkedName,
+  };
+}
+
+async function dnsAnswers(name, type) {
+  try {
+    const response = await fetch("https://cloudflare-dns.com/dns-query?name=" + encodeURIComponent(name) + "&type=" + type, {
+      headers: { accept: "application/dns-json" },
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!response.ok) return [];
+    const data = await response.json();
+    if (data.Status !== 0) return [];
+    if (data.Answer && data.Answer.length) return data.Answer;
+    return type === "NS" ? (data.Authority || []).filter((row) => row.type === 2) : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+async function openHome(domain) {
+  const hosts = domain.startsWith("www.") ? [domain] : [domain, "www." + domain];
+  for (const host of hosts) {
+    for (const scheme of ["https", "http"]) {
+      try {
+        const response = await fetch(scheme + "://" + host + "/", {
+          redirect: "follow",
+          signal: AbortSignal.timeout(5000),
+          headers: { "user-agent": SITE_UA, accept: "text/html,application/xhtml+xml" },
+        });
+        const text = await readLimited(response, 24000);
+        const finalHost = new URL(response.url).hostname.toLowerCase();
+        const sale = saleSignal(finalHost, text);
+        const live = response.status > 0 && response.status < 400 && text.length > 80 && !sale;
+        if (sale || live) return { live, sale, status: response.status };
+      } catch (error) {
+        continue;
+      }
+    }
+  }
+  return null;
+}
+
+function saleSignal(host, text) {
+  if (hostMatches(host, SALE_HOSTS)) return host;
+  const sample = String(text || "").toLowerCase();
+  const phrase = SALE_PHRASES.find((item) => sample.includes(item));
+  return phrase || "";
+}
+
+async function readLimited(response, max) {
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const chunks = [];
+  let size = 0;
+  while (size < max) {
+    const step = await reader.read();
+    if (step.done) break;
+    chunks.push(step.value);
+    size += step.value.length;
+  }
+  try { await reader.cancel(); } catch (error) { /* already finished */ }
+  const bytes = new Uint8Array(Math.min(size, max));
+  let offset = 0;
+  for (const chunk of chunks) {
+    const take = Math.min(chunk.length, bytes.length - offset);
+    bytes.set(chunk.subarray(0, take), offset);
+    offset += take;
+    if (offset >= bytes.length) break;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+function hostMatches(host, list) {
+  const name = String(host || "").toLowerCase().replace(/\.$/, "");
+  return list.some((item) => name === item || name.endsWith("." + item));
+}
+
+function extensionOf(domain) {
+  const parts = domain.split(".");
+  if (parts.length >= 3 && ["co", "com", "org", "net", "ac"].includes(parts[parts.length - 2]) && parts[parts.length - 1].length === 2) {
+    return parts.slice(-2).join(".");
+  }
+  return parts[parts.length - 1] || "";
+}
+
+function cleanDomain(value) {
+  let text = String(value || "").trim().toLowerCase();
+  text = text.replace(/^[a-z]+:\/\//, "").replace(/\/.*$/, "").replace(/\.$/, "");
+  if (text.startsWith("www.")) text = text.slice(4);
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/.test(text)) return "";
+  return text;
 }
 
 async function listLists(env, user) {

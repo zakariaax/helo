@@ -37,7 +37,14 @@
   .mark { width: 36px; height: 36px; border-radius: 10px; background: var(--green); color: var(--green-ink); display: grid; place-items: center; font-weight: 800; }
   .lede { color: var(--muted); margin: 0 0 18px; }
   label { display: block; font-size: 13px; font-weight: 700; margin: 12px 0 6px; }
-  input, select { width: 100%; border: 1px solid var(--line); background: var(--card); border-radius: 12px; padding: 10px 12px; }
+  input, select, textarea { width: 100%; border: 1px solid var(--line); background: var(--card); border-radius: 12px; padding: 10px 12px; }
+  textarea { min-height: 140px; resize: vertical; }
+  .tag { display: inline-block; border-radius: 999px; padding: 2px 8px; font-size: 12px; font-weight: 700; }
+  .tag.live { background: #e5f6ec; color: #14663a; }
+  .tag.sale { background: #f8efd4; color: #8a5a0d; }
+  .tag.offline { background: #eef0ee; color: #3d4741; }
+  .tag.available { background: #e7f0ff; color: #1d4e89; }
+  .tag.unknown { background: #f6e8e4; color: #9c3418; }
   .primary, .ghost, .texty { border-radius: 999px; padding: 10px 14px; cursor: pointer; }
   .primary { background: var(--green); color: var(--green-ink); border: 0; font-weight: 700; }
   .ghost { background: var(--card); border: 1px solid var(--line); }
@@ -128,6 +135,7 @@
       <button type="button" data-page="home" class="is-on">Dashboard</button>
       <button type="button" data-page="lists">Saved lists</button>
       <button type="button" data-page="check">Check names</button>
+      <button type="button" data-page="sites">Websites</button>
       <button type="button" id="nav-users" data-page="users" class="hidden">Users</button>
       <button type="button" data-page="settings">Settings</button>
     </nav>
@@ -171,6 +179,44 @@
           <tbody id="list-body"></tbody>
         </table>
         <p class="lede" id="list-empty">No saved lists yet. Run a check, then use Save list.</p>
+      </div>
+    </section>
+
+    <section id="page-sites" class="hidden">
+      <div class="top-actions">
+        <h1>Websites</h1>
+        <div class="inline">
+          <button class="ghost" type="button" id="site-stop" hidden>Stop</button>
+          <button class="primary" type="button" id="site-run">Check websites</button>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <p class="lede">Paste full domains, or names with no dot. Names with no dot use the extension box, so one name can be checked on several endings. The check is free: the public registry says if it is taken, public DNS shows the host, and Helo opens the page. No paid search is used.</p>
+        <div class="form-grid">
+          <div>
+            <label for="site-domains">Domains or names</label>
+            <textarea id="site-domains" spellcheck="false" placeholder="example.com&#10;brand"></textarea>
+          </div>
+          <div>
+            <label for="site-tlds">Extensions for names with no dot</label>
+            <textarea id="site-tlds" spellcheck="false" placeholder="com&#10;io&#10;ai"></textarea>
+            <p class="hint">A for-sale page is a parked or marketplace page. Offline means the name is taken and no website opened. Up to 200 names in one run.</p>
+          </div>
+        </div>
+        <p class="error" id="site-error"></p>
+        <p class="hint" id="site-progress"></p>
+      </div>
+      <div class="grid" id="site-stats">
+        <div class="card stat"><span>Live websites</span><b id="site-live">0</b></div>
+        <div class="card stat"><span>For-sale pages</span><b id="site-sale">0</b></div>
+        <div class="card stat"><span>Offline, taken</span><b id="site-offline">0</b></div>
+      </div>
+      <p class="lede" id="site-by-tld" style="margin-top:12px">For-sale pages by extension show up here.</p>
+      <div class="card" style="margin-top:12px">
+        <table>
+          <thead><tr><th>Domain</th><th>Extension</th><th>Status</th><th>What we saw</th></tr></thead>
+          <tbody id="site-body"></tbody>
+        </table>
       </div>
     </section>
 
@@ -470,7 +516,7 @@ function openPage(page, listId) {
   document.querySelectorAll("aside nav button[data-page]").forEach((button) => {
     button.classList.toggle("is-on", button.dataset.page === page);
   });
-  ["home", "lists", "check", "users", "settings"].forEach((name) => {
+  ["home", "lists", "check", "sites", "users", "settings"].forEach((name) => {
     document.getElementById("page-" + name).classList.toggle("hidden", name !== page);
   });
   document.body.classList.toggle("is-check", page === "check");
@@ -769,6 +815,105 @@ document.getElementById("password-form").addEventListener("submit", async (event
   error.classList.add("ok");
   error.textContent = "Password changed.";
   event.target.reset();
+});
+
+const SITE_LABELS = { live: "Live website", "for-sale": "For sale", offline: "Offline, taken", available: "Not registered", unknown: "Unknown" };
+let siteRun = 0;
+
+function siteDomains() {
+  const tlds = document.getElementById("site-tlds").value.split(/[\s,]+/).map((item) => item.trim().toLowerCase().replace(/^\./, "")).filter(Boolean);
+  const lines = document.getElementById("site-domains").value.split(/\n/).map((item) => item.trim()).filter((item) => item && !item.startsWith("#"));
+  const domains = [];
+  lines.forEach((line) => {
+    const host = line.replace(/^[a-z]+:\/\//i, "").split("/")[0].replace(/\.$/, "").toLowerCase();
+    if (!host) return;
+    if (host.includes(".")) domains.push(host.replace(/^www\./, ""));
+    else tlds.forEach((tld) => domains.push(host + "." + tld));
+  });
+  return [...new Set(domains)].slice(0, 200);
+}
+
+function paintSiteQuota(quota) {
+  if (!quota) return;
+  document.getElementById("home-quota").textContent = quota.unlimited ? "Unlimited" : (quota.used + " / " + quota.limit);
+  document.getElementById("side-quota").textContent = quota.unlimited ? "Checks today: unlimited" : ("Checks today: " + quota.used + " / " + quota.limit);
+}
+
+document.getElementById("site-run").addEventListener("click", async () => {
+  const error = document.getElementById("site-error");
+  const progress = document.getElementById("site-progress");
+  error.classList.remove("ok");
+  error.textContent = "";
+  const domains = siteDomains();
+  if (!domains.length) {
+    error.textContent = "Add a domain, or a name plus at least one extension.";
+    return;
+  }
+  const run = ++siteRun;
+  document.getElementById("site-stop").hidden = false;
+  const body = document.getElementById("site-body");
+  body.replaceChildren();
+  const counts = { live: 0, "for-sale": 0, offline: 0, available: 0, unknown: 0 };
+  const saleByTld = {};
+  const paint = () => {
+    document.getElementById("site-live").textContent = String(counts.live);
+    document.getElementById("site-sale").textContent = String(counts["for-sale"]);
+    document.getElementById("site-offline").textContent = String(counts.offline);
+    const parts = Object.keys(saleByTld).sort().map((tld) => "." + tld + " " + saleByTld[tld]);
+    document.getElementById("site-by-tld").textContent = parts.length ? "For-sale pages by extension: " + parts.join(", ") : "No for-sale pages in this run yet.";
+  };
+  paint();
+  let cursor = 0;
+  let done = 0;
+  async function nextDomain() {
+    while (cursor < domains.length && run === siteRun) {
+      const domain = domains[cursor];
+      cursor += 1;
+      progress.textContent = done + " of " + domains.length;
+      const response = await fetch("/api/site", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ domain }),
+      });
+      const data = await response.json();
+      if (run !== siteRun) return;
+      if (response.status === 429) {
+        error.textContent = data.error || "Daily limit reached.";
+        document.getElementById("site-stop").hidden = true;
+        siteRun += 1;
+        return;
+      }
+      const kind = SITE_LABELS[data.kind] ? data.kind : "unknown";
+      counts[kind] += 1;
+      if (kind === "for-sale" && data.tld) saleByTld[data.tld] = (saleByTld[data.tld] || 0) + 1;
+      const row = document.createElement("tr");
+      const status = document.createElement("span");
+      status.className = "tag " + (kind === "for-sale" ? "sale" : kind);
+      status.textContent = SITE_LABELS[kind];
+      [data.domain || domain, "." + (data.tld || ""), status, data.detail || ""].forEach((value) => {
+        const cell = document.createElement("td");
+        if (value instanceof Node) cell.append(value);
+        else cell.textContent = value;
+        row.append(cell);
+      });
+      body.append(row);
+      paintSiteQuota(data.quota);
+      done += 1;
+      progress.textContent = done + " of " + domains.length;
+      paint();
+    }
+  }
+  await Promise.all([nextDomain(), nextDomain(), nextDomain()]);
+  if (run === siteRun) {
+    document.getElementById("site-stop").hidden = true;
+    progress.textContent = "Finished " + done + " of " + domains.length + ".";
+  }
+});
+
+document.getElementById("site-stop").addEventListener("click", () => {
+  siteRun += 1;
+  document.getElementById("site-stop").hidden = true;
+  document.getElementById("site-progress").textContent = "Stopped. Rows already on screen are kept.";
 });
 
 setMode("login");
