@@ -1,0 +1,1733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bulk TLD checker</title>
+<style>
+  :root {
+    --bg: #efeae2;
+    --card: #fffdf8;
+    --ink: #1e1a16;
+    --muted: #5f574e;
+    --line: #e4d9cb;
+    --green: #0e6a3b;
+    --green-soft: #e4f5ea;
+    --red: #9c3418;
+    --red-soft: #fbe8e2;
+    --amber: #8a5a0d;
+    --amber-soft: #f8efd4;
+    --accent: #1b4f3a;
+    --accent-ink: #f4faf6;
+    --pending: #ddd6cb;
+    --shadow: 0 12px 32px rgba(62, 42, 18, 0.06);
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background:
+      radial-gradient(1200px 400px at 10% -10%, #e7f2ea 0%, transparent 55%),
+      var(--bg);
+    color: var(--ink);
+    font: 16px/1.45 "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+  }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  h1, h2, h3 { font-family: Palatino, "Palatino Linotype", "Iowan Old Style", Georgia, serif; font-weight: 600; letter-spacing: -0.02em; }
+  .wrap { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 32px 0 64px; }
+  header.top { display: flex; justify-content: space-between; gap: 24px; align-items: flex-end; margin-bottom: 22px; }
+  .mark {
+    width: 42px; height: 42px; border-radius: 12px; background: var(--accent); color: var(--accent-ink);
+    display: grid; place-items: center; font-weight: 700; letter-spacing: 0.04em; font-size: 12px;
+  }
+  .brand { display: flex; gap: 12px; align-items: center; }
+  h1 { margin: 0; font-size: 34px; line-height: 1.05; }
+  .lede { margin: 6px 0 0; color: var(--muted); max-width: 62ch; }
+  .recommend {
+    background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px;
+    box-shadow: var(--shadow); margin-bottom: 16px;
+  }
+  .recommend strong { color: var(--accent); }
+  .methods { display: grid; grid-template-columns: 1.15fr 1fr 1fr; gap: 12px; margin: 18px 0 16px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px 16px;
+    box-shadow: var(--shadow);
+  }
+  .card.best { border-color: #b7d7c4; background: linear-gradient(180deg, #f5fbf7, var(--card) 48px); }
+  .card h2 { margin: 0 0 8px; font-size: 22px; }
+  .card p, .recommend p { margin: 0; color: var(--muted); }
+  .card p + p { margin-top: 8px; }
+  .presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 0 0 8px; }
+  .preset {
+    text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    padding: 12px 14px 14px; box-shadow: var(--shadow);
+  }
+  .preset.is-on { border-color: var(--accent); background: #f3faf6; box-shadow: inset 0 0 0 1px var(--accent); }
+  .preset .count { display: block; font-family: Palatino, "Palatino Linotype", Georgia, serif; font-size: 26px; line-height: 1; letter-spacing: -0.03em; }
+  .preset strong { display: block; margin-top: 6px; }
+  .preset small { display: block; margin-top: 4px; color: var(--muted); font-size: 13px; line-height: 1.35; }
+  .preset-note { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+  .mode-switch { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; }
+  .mode {
+    border-radius: 999px; padding: 8px 14px; border: 1px solid var(--line); background: transparent;
+  }
+  .mode.is-on { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 700; }
+  .mode-note { color: var(--muted); font-size: 13px; }
+  .editors { display: grid; grid-template-columns: 1.4fr 0.8fr; gap: 12px; margin-bottom: 12px; }
+  .editors.manual #field-tlds { opacity: 0.55; }
+  label.field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .label-row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+  .label-row span { color: var(--muted); font-size: 13px; }
+  textarea {
+    width: 100%; min-height: 280px; resize: vertical; padding: 12px 14px; border-radius: 14px;
+    border: 1px solid var(--line); background: var(--card); line-height: 1.45;
+  }
+  textarea:focus, input:focus, select:focus { outline: 2px solid #9dccb2; border-color: #7eae96; }
+  .hint { color: var(--muted); font-size: 13px; min-height: 2.6em; }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 4px 0 14px; }
+  .primary, .ghost, .danger {
+    border-radius: 999px; padding: 10px 16px; border: 1px solid transparent;
+  }
+  .primary { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  .primary:disabled { opacity: 0.55; cursor: wait; }
+  .ghost { background: transparent; border-color: var(--line); }
+  .ghost:hover, .danger:hover { background: #fff; }
+  .danger { background: transparent; border-color: #e7c2b8; color: var(--red); }
+  .progress-card { padding: 14px 16px; margin-bottom: 12px; }
+  .progress-top { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: baseline; }
+  .progress-top strong { font-size: 18px; }
+  #progress-eta, #progress-elapsed { font-weight: 700; font-variant-numeric: tabular-nums; }
+  #progress-elapsed { text-align: center; }
+  #progress-eta { text-align: right; }
+  @media (max-width: 720px) {
+    .progress-top { grid-template-columns: 1fr; gap: 4px; }
+    #progress-elapsed, #progress-eta { text-align: left; }
+  }
+  .progress-sub { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
+  .bar { height: 8px; background: #ebe4da; border-radius: 99px; overflow: hidden; margin-top: 10px; }
+  .bar span { display: block; height: 100%; width: 0; background: var(--accent); border-radius: inherit; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .toolbar input, .toolbar select {
+    background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px;
+  }
+  .toolbar input { min-width: min(280px, 100%); }
+  .target-field {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700; color: var(--muted);
+  }
+  .target-field input { width: 4.8rem; min-width: 4.8rem; text-align: center; font-weight: 700; color: var(--ink); }
+  .stats { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .pill { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; font-size: 14px; }
+  .pill b { font-variant-numeric: tabular-nums; }
+  .taken-ink { color: var(--red); }
+  .free-ink { color: var(--green); }
+  .unk-ink { color: var(--amber); }
+  .banner {
+    border-radius: 14px; padding: 12px 14px; margin-bottom: 12px; background: #fff6e8; border: 1px solid #efd7a8; color: #6d4d12;
+  }
+  .banner.bad { background: var(--red-soft); border-color: #f0c7bc; color: var(--red); }
+  .table-card { padding: 0; overflow: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 980px; }
+  tr.opportunity td { background: #f3faf6; }
+  tr.opportunity td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+  .name-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .pick {
+    display: inline-flex; align-items: center; border-radius: 999px; background: var(--accent); color: var(--accent-ink);
+    font-size: 11px; font-weight: 800; letter-spacing: 0.04em; padding: 2px 7px;
+  }
+  .score-break { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; font-weight: 600; white-space: normal; max-width: 9.5rem; }
+  th, td { text-align: left; vertical-align: top; padding: 12px 12px; border-bottom: 1px solid var(--line); }
+  th { position: sticky; top: 0; background: #fffdf8; z-index: 1; font-size: 13px; color: var(--muted); font-weight: 700; }
+  th button { background: none; border: 0; padding: 0; font-weight: 700; color: var(--muted); }
+  th button[aria-sort="descending"], th button[aria-sort="ascending"] { color: var(--ink); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; width: 1%; }
+  .count-btn {
+    background: none; border: 0; padding: 2px 6px; margin: -2px -6px; border-radius: 8px;
+    font: inherit; font-variant-numeric: tabular-nums; font-weight: 700; cursor: pointer;
+  }
+  .count-btn:hover:not(:disabled) { text-decoration: underline; }
+  .count-btn[aria-pressed="true"] { background: #f3eee6; }
+  .count-btn:disabled { cursor: default; }
+  .name-btn { background: none; border: 0; padding: 0; font-weight: 700; text-align: left; }
+  .name-btn:hover { text-decoration: underline; }
+  .subascii { color: var(--muted); font-size: 12px; }
+  .mix { display: flex; width: 120px; height: 8px; border-radius: 99px; overflow: hidden; background: var(--pending); margin-top: 6px; }
+  .mix i { display: block; height: 100%; }
+  .mix .reg { background: var(--red); }
+  .mix .avail { background: var(--green); }
+  .mix .unk { background: #e0b15a; }
+  .frac { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; max-width: 340px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 3px 8px;
+    font-size: 12.5px; font-weight: 700; line-height: 1.3;
+  }
+  .chip small { font-size: 10px; letter-spacing: 0.04em; font-weight: 800; opacity: 0.7; }
+  .chip.registered { background: var(--red-soft); color: var(--red); }
+  .chip.available { background: var(--green-soft); color: var(--green); }
+  .chip.unknown { background: var(--amber-soft); color: var(--amber); }
+  tr.detail td { background: #fbf8f3; }
+  .detail-table { width: 100%; min-width: 0; }
+  .detail-table th { position: static; background: transparent; }
+  .status-word.registered { color: var(--red); }
+  .status-word.available { color: var(--green); }
+  .status-word.unknown { color: var(--amber); }
+  .empty { padding: 28px 18px; color: var(--muted); }
+  .more-chips { border: 0; background: transparent; color: var(--muted); font-size: 12px; font-weight: 700; padding: 3px 2px; }
+  .more-chips:hover { color: var(--ink); }
+  .detail-scroll { max-height: 420px; overflow: auto; }
+  .status-note { margin: 0 0 8px; color: var(--muted); font-size: 13px; }
+  .status-panel { max-height: 280px; overflow: auto; }
+  .status-panel .chips { max-width: none; }
+  .legend { color: var(--muted); font-size: 13px; margin: 8px 2px 0; }
+  .pager { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 4px 0 12px; }
+  .table-card > .pager { padding: 12px; }
+  .pager-label { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .banner .ghost, .banner .primary { margin-left: 8px; }
+  .footer-note { color: var(--muted); font-size: 13px; margin-top: 18px; }
+  code { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 0.92em; }
+  @media (max-width: 980px) {
+    .methods, .editors, .presets, header.top { grid-template-columns: 1fr; display: grid; }
+    header.top { align-items: start; }
+    h1 { font-size: 28px; }
+  }
+  @media (max-width: 720px) {
+    .presets { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="brand"><div class="mark">TLD</div><h1>Bulk TLD checker</h1></div>
+      <p class="lede">Paste name ideas. For each one, see how many extensions are already registered, which are taken, and which look available.</p>
+    </div>
+  </header>
+
+  <section class="recommend">
+    <p><strong>Best free method: public RDAP.</strong> It is the registry’s own directory over HTTPS, with a clear found or not-found answer. DNS is the fallback when a TLD has no RDAP server, and also when that registry cannot be reached from the browser. Classic WHOIS is free but the wording is too inconsistent to trust for a bulk yes or no.</p>
+  </section>
+
+  <div id="banner"></div>
+
+  <div class="presets" role="group" aria-label="TLD sets">
+    <button type="button" class="preset is-on" data-preset="all" aria-pressed="true">
+      <span class="count" data-count="all">—</span>
+      <strong>All TLDs</strong>
+      <small>Every extension in the IANA root</small>
+    </button>
+    <button type="button" class="preset" data-preset="famous" aria-pressed="false">
+      <span class="count" data-count="famous">400</span>
+      <strong>Famous 400</strong>
+      <small>The biggest zones, by domains registered</small>
+    </button>
+    <button type="button" class="preset" data-preset="launch" aria-pressed="false">
+      <span class="count" data-count="launch">—</span>
+      <strong>Launch</strong>
+      <small>The short list worth buying for a new product</small>
+    </button>
+    <button type="button" class="preset" data-preset="countries" aria-pressed="false">
+      <span class="count" data-count="countries">—</span>
+      <strong>Countries</strong>
+      <small>The largest country-code extensions</small>
+    </button>
+  </div>
+  <p class="preset-note" id="preset-note">Loading the full IANA list…</p>
+
+  <div class="mode-switch" role="group" aria-label="Check mode">
+    <button type="button" class="mode is-on" id="mode-bulk" data-mode="bulk" aria-pressed="true">Bulk names</button>
+    <button type="button" class="mode" id="mode-manual" data-mode="manual" aria-pressed="false">Manual domains</button>
+    <span class="mode-note" id="mode-note">Each name is checked on every extension in the TLD box.</span>
+  </div>
+
+  <div class="editors">
+    <label class="field" id="field-names">
+      <div class="label-row"><strong id="names-label">Names</strong><span id="name-count">0 names</span></div>
+      <textarea id="names" spellcheck="false" autocomplete="off" placeholder="One name per line"></textarea>
+      <div class="hint" id="name-hint">Second-level labels, like <code>brandname</code>. Full domains (<code>brand.com</code>), URLs, uppercase, and extra spaces are normalized. International names are checked in punycode. Up to 20,000 names per run. About 100 names across every extension stays inside an hour. For thousands of names, use Launch or Countries. A list that would run for many hours asks you to keep the largest extensions first.</div>
+    </label>
+    <label class="field" id="field-tlds">
+      <div class="label-row"><strong>TLDs</strong><span id="tld-count">0 TLDs</span></div>
+      <textarea id="tlds" spellcheck="false" autocomplete="off" placeholder="Loading the default list…"></textarea>
+      <div class="hint" id="coverage-hint">Loading the IANA RDAP directory…</div>
+    </label>
+  </div>
+
+  <div class="actions">
+    <button class="primary" id="check" type="button">Check</button>
+    <button class="primary" id="continue" type="button" hidden>Continue scanning</button>
+    <button class="danger" id="stop" type="button" hidden>Stop</button>
+    <button class="ghost" id="example" type="button">Load example</button>
+    <button class="ghost" id="recheck" type="button" hidden>Recheck unknowns</button>
+    <button class="ghost" id="clear-cache" type="button">Clear tab cache</button>
+  </div>
+
+  <section class="card progress-card" id="progress-card" hidden>
+    <div class="progress-top">
+      <strong id="progress-label">Waiting</strong>
+      <span id="progress-elapsed"></span>
+      <span id="progress-eta"></span>
+    </div>
+    <div class="bar" aria-hidden="true"><span id="progress-bar"></span></div>
+    <p class="progress-sub" id="progress-detail"></p>
+  </section>
+
+  <div class="toolbar">
+    <input id="search" type="search" placeholder="Filter names" aria-label="Filter names">
+    <label class="target-field">Target
+      <input id="target" type="text" value="si" maxlength="32" spellcheck="false" autocomplete="off" aria-label="Target extension">
+    </label>
+    <select id="filter" aria-label="Filter results">
+      <option value="all">All results</option>
+      <option value="opportunity">Investor picks</option>
+      <option value="available">Has any available</option>
+      <option value="rdap-available">Has RDAP available</option>
+      <option value="registered">Has registered</option>
+      <option value="unknown">Has unknown</option>
+    </select>
+    <button class="ghost" id="export" type="button">Export report</button>
+  </div>
+  <div class="stats" id="stats" hidden></div>
+  <div id="skipped"></div>
+  <div class="pager" id="pager-top" hidden></div>
+
+  <section class="card table-card" id="table-card">
+    <div class="empty" id="empty">Results show up here after a check. Names with the highest investor score rise to the top. A highlighted pick is a name whose target extension is free while .com or .ai is already taken. Click a red, green, or amber count to list those extensions. Click a name for the full per-extension detail.</div>
+    <table id="results" hidden>
+      <thead>
+        <tr>
+          <th><button type="button" data-sort="name">Name</button></th>
+          <th class="num"><button type="button" data-sort="score">Score</button></th>
+          <th class="num"><button type="button" data-sort="registered">Registered</button></th>
+          <th class="num"><button type="button" data-sort="available">Available</button></th>
+          <th class="num"><button type="button" data-sort="unknown">Unknown</button></th>
+          <th>Taken TLDs</th>
+          <th>Available TLDs</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="pager" id="pager-bottom" hidden></div>
+  </section>
+  <p class="legend" id="legend" hidden>The investor score counts only extensions that are already taken: .com 10, .ai 6, .io 4, .co 3, .app 3, .dev 2, .net 2, .org 2, .me 1, .xyz 1. A highlighted pick means the target extension is free while .com or .ai is taken. Red is taken, green looks available, amber is unknown. Click a count to list those extensions. A failed lookup stays unknown and is never called available. RDAP availability is high confidence. DNS availability is a hint.</p>
+  <section class="methods" aria-label="How the lookup methods compare">
+    <article class="card best">
+      <h2>RDAP</h2>
+      <p>IANA publishes which HTTPS server to ask for each TLD. HTTP 200 means the registry has the domain. HTTP 404 means it does not. That is the strongest free signal.</p>
+      <p>Owner contacts are often privacy-redacted. Redaction does not change the found / not-found answer. A not-found name can still be premium, reserved, or blocked at the moment you try to buy it.</p>
+    </article>
+    <article class="card">
+      <h2>DNS</h2>
+      <p>NXDOMAIN means the public DNS has no such name. That usually means unregistered, but a registered domain with no nameservers looks the same. Some TLDs answer for every name, so DNS says taken when it is not a normal registration.</p>
+      <p>This app uses DNS when IANA lists no RDAP server, and when the registry server does not answer the browser. Many registries block browser requests, which is why a full scan used to show a lot of unknowns. Those chips are labeled DNS. Availability from DNS is low confidence.</p>
+    </article>
+    <article class="card">
+      <h2>WHOIS</h2>
+      <p>Port 43 WHOIS needs no key, but every registry writes a different paragraph. “Available”, “not found”, and “no match” are not safe to parse, and bulk queries get cut off.</p>
+      <p>Privacy redaction hides contact data you do not need for this job. This app does not query WHOIS.</p>
+    </article>
+  </section>
+  <p class="footer-note" id="footer-note">Nothing is uploaded to an account. A check asks IANA for the RDAP server list, then the registry for each RDAP TLD. If the registry cannot be reached, it asks Cloudflare or Google DNS-over-HTTPS and labels that as a DNS hint. Answers stay in this browser tab until you close it. Names are checked together, with a cap per registry so one slow server does not stall the rest.</p>
+</div>
+<script src="browser-check.js"></script>
+<script>
+const CACHE_KEY = "tld-checker-cache-v2";
+const NAMES_KEY = "tld-checker-names";
+const TLDS_KEY = "tld-checker-tlds-v2";
+const PRESET_KEY = "tld-checker-preset";
+const MODE_KEY = "tld-checker-mode";
+const TARGET_KEY = "tld-checker-target";
+const BULK_HINT = "Second-level labels, like <code>brandname</code>. Full domains (<code>brand.com</code>), URLs, uppercase, and extra spaces are normalized. International names are checked in punycode. Up to 20,000 names per run. About 100 names across every extension stays inside an hour. For thousands of names, use Launch or Countries. A list that would run for many hours asks you to keep the largest extensions first.";
+const MANUAL_HINT = "One domain per line, like <code>si.si</code>, <code>me.io</code>, or <code>alpha.dev</code>. Only the extension written on that line is checked. A whole list of domains is fine. The TLD box is not used.";
+const CHIP_CAP = 12;
+const CHECK_CHUNK = 400;
+const PRESET_COPY = {
+  all: "Every TLD in the IANA root is in the box, largest zones first. A full scan checks all of them.",
+  famous: "The 400 largest zones, ranked by how many domains each one holds.",
+  launch: "The short list worth buying for a new product. This is the fast check.",
+  countries: "The 80 largest country-code extensions, for an international sweep.",
+};
+const namesEl = document.getElementById("names");
+const tldsEl = document.getElementById("tlds");
+const bannerEl = document.getElementById("banner");
+const state = {
+  names: [],
+  tlds: [],
+  results: new Map(),
+  skipped: [],
+  skippedCount: 0,
+  duplicateCount: 0,
+  sortKey: "score",
+  sortDir: "desc",
+  started: false,
+  running: false,
+  controller: null,
+  lookupsDone: 0,
+  lookupsTotal: 0,
+  currentName: "",
+  suffixes: new Set(),
+  bootstrapError: null,
+  publication: null,
+  suffixCount: 0,
+  expanded: new Set(),
+  defaultTldText: "",
+  hasUnknown: false,
+  presetText: {},
+  activePreset: "all",
+  hosted: false,
+  pendingPreset: "",
+  focus: null,
+  runStartedAt: 0,
+  runDone: 0,
+  runTotal: 0,
+  etaMs: null,
+  etaRough: true,
+  page: 0,
+  showAll: false,
+  mode: "scan",
+  listMode: "bulk",
+  manual: false,
+  elapsedMs: 0,
+  segmentStart: 0,
+};
+
+let cache = loadCache();
+let cacheWrites = true;
+let cacheCount = Object.keys(cache).length;
+let renderQueued = false;
+let cacheTimer = 0;
+let draftTimer = 0;
+let metricStamp = -1;
+const metricMemo = new Map();
+
+function loadCache() {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(CACHE_KEY) || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function scheduleCacheFlush() {
+  if (!cacheWrites || cacheCount > 20000) return;
+  clearTimeout(cacheTimer);
+  cacheTimer = setTimeout(() => {
+    if (!cacheWrites || cacheCount > 20000) return;
+    try {
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+    } catch (error) {
+      cacheWrites = false;
+    }
+  }, 2500);
+}
+
+function cacheKey(ascii, tld) {
+  return ascii + "|" + tld;
+}
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text != null) node.textContent = text;
+  return node;
+}
+
+function showBanner(text, bad) {
+  bannerEl.replaceChildren();
+  if (!text) return;
+  const box = el("div", bad ? "banner bad" : "banner", text);
+  bannerEl.appendChild(box);
+}
+
+function splitDraft(text) {
+  return text.split(/[\s,;]+/).map((item) => item.trim().replace(/^\.+/, "").toLowerCase()).filter(Boolean);
+}
+
+function tldHasRdap(tld) {
+  if (state.bootstrapError || state.suffixes.size === 0) return false;
+  const labels = tld.split(".");
+  for (let index = 0; index < labels.length; index += 1) {
+    if (state.suffixes.has(labels.slice(index).join("."))) return true;
+  }
+  return false;
+}
+
+function renderCoverage() {
+  const hint = document.getElementById("coverage-hint");
+  const tlds = splitDraft(tldsEl.value);
+  document.getElementById("tld-count").textContent = tlds.length + (tlds.length === 1 ? " TLD" : " TLDs");
+  const names = state.listMode === "manual"
+    ? namesEl.value.split(/[\s,;]+/).map((item) => item.trim()).filter((item) => item && !item.startsWith("#"))
+    : namesEl.value.split(/\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith("#"));
+  const nameWord = state.listMode === "manual" ? (names.length === 1 ? " domain" : " domains") : (names.length === 1 ? " line" : " lines");
+  document.getElementById("name-count").textContent = names.length + nameWord;
+  if (state.listMode === "manual") {
+    document.getElementById("tld-count").textContent = "Not used";
+    hint.textContent = "Manual check ignores this list. Each domain is checked only on the extension typed with it.";
+    return;
+  }
+  if (state.suffixes.size === 0 && !state.bootstrapError) {
+    hint.textContent = "Loading the IANA RDAP directory…";
+    return;
+  }
+  if (state.bootstrapError) {
+    hint.textContent = state.bootstrapError + " Until it loads, checks use DNS hints only.";
+    return;
+  }
+  const rdap = [];
+  const dns = [];
+  tlds.forEach((tld) => (tldHasRdap(tld) ? rdap : dns).push(tld));
+  const published = state.publication ? " IANA RDAP list published " + state.publication.slice(0, 10) + "." : "";
+  const lookups = names.length * tlds.length;
+  const pace = lookups ? " About " + formatDuration((lookups / 150) * 1000) + " for this list." : "";
+  if (tlds.length > 18) {
+    hint.textContent = rdap.length + " extensions ask the registry when it answers quickly. Slow registries use a DNS hint." + published + pace;
+    return;
+  }
+  hint.textContent = "RDAP for " + (rdap.join(", ") || "none") + ". DNS hint only for " + (dns.join(", ") || "none") + "." + published;
+}
+
+function formatCount(value) {
+  return Number(value).toLocaleString();
+}
+
+function paintPresets() {
+  document.querySelectorAll(".preset").forEach((button) => {
+    const on = button.dataset.preset === state.activePreset;
+    button.classList.toggle("is-on", on);
+    button.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  const note = document.getElementById("preset-note");
+  if (state.activePreset && PRESET_COPY[state.activePreset]) {
+    const count = (state.presetText[state.activePreset] || "").split("\n").filter(Boolean).length;
+    note.textContent = (count ? formatCount(count) + " TLDs. " : "") + PRESET_COPY[state.activePreset];
+  } else {
+    note.textContent = "Custom list. Pick a set above to replace it.";
+  }
+}
+
+function applyPreset(id) {
+  const text = state.presetText[id];
+  if (!text) {
+    state.pendingPreset = id;
+    return;
+  }
+  state.pendingPreset = "";
+  state.activePreset = id;
+  tldsEl.value = text;
+  sessionStorage.setItem(TLDS_KEY, text);
+  sessionStorage.setItem(PRESET_KEY, id);
+  paintPresets();
+  renderCoverage();
+}
+
+function syncPresetFromText() {
+  const current = tldsEl.value.trim();
+  let match = "";
+  Object.keys(state.presetText).forEach((id) => {
+    if ((state.presetText[id] || "").trim() === current) match = id;
+  });
+  state.activePreset = match;
+  if (match) sessionStorage.setItem(PRESET_KEY, match);
+  else sessionStorage.removeItem(PRESET_KEY);
+  paintPresets();
+}
+
+function scheduleDraft() {
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(() => {
+    sessionStorage.setItem(NAMES_KEY, namesEl.value);
+    sessionStorage.setItem(TLDS_KEY, tldsEl.value);
+    syncPresetFromText();
+    renderCoverage();
+  }, 150);
+}
+
+function installPresetPayload(data) {
+  const presets = data.presets || {};
+  ["all", "famous", "launch", "countries"].forEach((id) => {
+    const list = presets[id] || [];
+    state.presetText[id] = list.join("\n");
+    const count = document.querySelector('[data-count="' + id + '"]');
+    if (count && list.length) count.textContent = formatCount(list.length);
+  });
+  state.defaultTldText = state.presetText.all || data.text || "";
+  if (state.pendingPreset && state.presetText[state.pendingPreset]) applyPreset(state.pendingPreset);
+  else if (!sessionStorage.getItem(TLDS_KEY)) applyPreset(data.defaultPreset || "all");
+  else syncPresetFromText();
+  if (data.bootstrapError) state.bootstrapError = data.bootstrapError;
+  if (data.publication) state.publication = data.publication;
+}
+
+function markHosted() {
+  state.hosted = true;
+  const note = document.getElementById("footer-note");
+  note.textContent = "This public page runs entirely in your browser. A check asks IANA for the RDAP server list, then the registry for each RDAP TLD. If the registry cannot be reached, it asks Cloudflare or Google DNS and labels that as a DNS hint. Names are checked together. Nothing is uploaded to an account. Answers stay in this tab until you close it.";
+}
+
+async function loadDirectory() {
+  let hosted = false;
+  try {
+    const response = await fetch("/api/defaults");
+    if (!response.ok) throw new Error("defaults");
+    installPresetPayload(await response.json());
+  } catch (error) {
+    if (!window.TldBrowser) {
+      if (!tldsEl.value) tldsEl.value = "com\nnet\norg\nio\nco\nai\napp\ndev\nme\nuk\nde";
+      showBanner("The checker server is not responding. From this folder run python3 server.py and open http://127.0.0.1:8765.", true);
+    } else {
+      try {
+        installPresetPayload(await TldBrowser.loadDefaults());
+        hosted = true;
+        markHosted();
+      } catch (inner) {
+        if (!tldsEl.value) tldsEl.value = "com\nnet\norg\nio\nco\nai\napp\ndev\nme\nuk\nde";
+        showBanner("Could not load the TLD list for this page.", true);
+      }
+    }
+  }
+  if (hosted) {
+    try {
+      const boot = await TldBrowser.loadBootstrap();
+      state.suffixes = new Set(boot.suffixes || []);
+      state.bootstrapError = boot.error || null;
+      state.publication = boot.publication || state.publication;
+      state.suffixCount = boot.count || 0;
+      if (boot.error) showBanner(boot.error + " Checks will use DNS hints only.", false);
+    } catch (error) {
+      state.bootstrapError = "Could not download the IANA RDAP directory.";
+      showBanner(state.bootstrapError + " Checks will use DNS hints only.", false);
+    }
+    renderCoverage();
+    return;
+  }
+  try {
+    const response = await fetch("/api/rdap-suffixes");
+    if (!response.ok) return;
+    const data = await response.json();
+    state.suffixes = new Set(data.suffixes || []);
+    state.bootstrapError = data.error || null;
+    state.publication = data.publication || state.publication;
+    state.suffixCount = data.count || 0;
+    if (data.error) showBanner(data.error + " Checks will use DNS hints only.", false);
+  } catch (error) {
+    /* defaults banner already covers a dead server */
+  }
+  renderCoverage();
+}
+
+function tldsFor(name) {
+  return name.tlds && name.tlds.length ? name.tlds : state.tlds;
+}
+
+function labelFor(name) {
+  return name.checkName || name.ascii;
+}
+
+function rowForResult(result) {
+  if (result.row) return result.row;
+  const match = state.names.find((name) => labelFor(name) === result.name && tldsFor(name).some((tld) => tld.ascii === result.tld));
+  return match ? match.ascii : result.name;
+}
+
+const INVESTOR_WEIGHTS = [
+  ["com", 10], ["ai", 6], ["io", 4], ["co", 3], ["app", 3],
+  ["dev", 2], ["net", 2], ["org", 2], ["me", 1], ["xyz", 1],
+];
+const INVESTOR_WEIGHT = Object.fromEntries(INVESTOR_WEIGHTS);
+const INVESTOR_ORDER = new Map(INVESTOR_WEIGHTS.map(([tld], index) => [tld, index]));
+let namesByLabel = new Map();
+
+function targetTld() {
+  const input = document.getElementById("target");
+  return (input ? input.value : "")
+    .trim()
+    .toLowerCase()
+    .replace(/^\.+/, "")
+    .replace(/[^a-z0-9.-]/g, "");
+}
+
+function weightPhrase() {
+  return INVESTOR_WEIGHTS.map(([tld, weight]) => "." + tld + " " + weight).join(", ");
+}
+
+function storedResult(name, tld) {
+  const key = cacheKey(labelFor(name), tld);
+  return state.results.get(key) || cache[key] || null;
+}
+
+function investorFromResults(name) {
+  const parts = [];
+  let score = 0;
+  INVESTOR_WEIGHTS.forEach(([tld, weight]) => {
+    const hit = storedResult(name, tld);
+    if (!hit || hit.status !== "registered") return;
+    score += weight;
+    parts.push({ tld: tld, weight: weight });
+  });
+  return { score: score, parts: parts };
+}
+
+function isOpportunity(name) {
+  const target = targetTld();
+  if (!target) return false;
+  if (state.manual) {
+    const own = tldsFor(name);
+    if (own.length !== 1 || own[0].ascii !== target) return false;
+  }
+  const targetHit = storedResult(name, target);
+  if (!targetHit || targetHit.status !== "available") return false;
+  const com = storedResult(name, "com");
+  const ai = storedResult(name, "ai");
+  return !!((com && com.status === "registered") || (ai && ai.status === "registered"));
+}
+
+function scoreBreakdown(counts) {
+  if (!counts.scoreParts || !counts.scoreParts.length) return "";
+  return counts.scoreParts.map((part) => "." + part.tld + " " + part.weight).join(", ");
+}
+
+function applyInvestorHit(counts, hit) {
+  if (!counts) return;
+  const weight = INVESTOR_WEIGHT[hit.tld];
+  if (!weight || hit.status !== "registered" || counts.scoreTlds.has(hit.tld)) return;
+  counts.scoreTlds.add(hit.tld);
+  counts.score += weight;
+  counts.scoreParts.push({ tld: hit.tld, weight: weight });
+  counts.scoreParts.sort((a, b) => (INVESTOR_ORDER.get(a.tld) ?? 99) - (INVESTOR_ORDER.get(b.tld) ?? 99));
+}
+
+function metrics(name) {
+  const tlds = tldsFor(name);
+  const memo = metricMemo.get(name.ascii);
+  if (memo && memo.total === tlds.length) return memo;
+  const counts = { registered: 0, available: 0, unknown: 0, done: 0, rdapAvailable: 0, total: tlds.length, score: 0, scoreParts: [], scoreTlds: new Set() };
+  tlds.forEach((tld) => {
+    const hit = state.results.get(cacheKey(labelFor(name), tld.ascii));
+    if (!hit) return;
+    counts.done += 1;
+    if (hit.status === "registered") counts.registered += 1;
+    else if (hit.status === "available") {
+      counts.available += 1;
+      if (hit.method === "rdap") counts.rdapAvailable += 1;
+    } else counts.unknown += 1;
+  });
+  const investor = investorFromResults(name);
+  counts.score = investor.score;
+  counts.scoreParts = investor.parts;
+  counts.scoreTlds = new Set(investor.parts.map((part) => part.tld));
+  metricMemo.set(name.ascii, counts);
+  return counts;
+}
+
+function bumpMetric(ascii, hit) {
+  const counts = metricMemo.get(ascii);
+  if (!counts) return;
+  counts.done += 1;
+  if (hit.status === "registered") counts.registered += 1;
+  else if (hit.status === "available") {
+    counts.available += 1;
+    if (hit.method === "rdap") counts.rdapAvailable += 1;
+  } else counts.unknown += 1;
+  applyInvestorHit(counts, hit);
+}
+
+function recomputeMetrics() {
+  metricMemo.clear();
+  namesByLabel = new Map();
+  state.names.forEach((name) => {
+    const label = labelFor(name);
+    const group = namesByLabel.get(label);
+    if (group) group.push(name);
+    else namesByLabel.set(label, [name]);
+    metrics(name);
+  });
+}
+
+function visibleNames() {
+  const query = document.getElementById("search").value.trim().toLowerCase();
+  const filter = document.getElementById("filter").value;
+  const rows = state.names.filter((name) => {
+    if (query && !name.display.toLowerCase().includes(query) && !name.ascii.includes(query)) return false;
+    const counts = metrics(name);
+    if (filter === "opportunity") return isOpportunity(name);
+    if (filter === "available") return counts.available > 0;
+    if (filter === "rdap-available") return counts.rdapAvailable > 0;
+    if (filter === "registered") return counts.registered > 0;
+    if (filter === "unknown") return counts.unknown > 0;
+    return true;
+  });
+  const dir = state.sortDir === "asc" ? 1 : -1;
+  rows.sort((a, b) => {
+    if (state.sortKey === "name") return a.display.localeCompare(b.display) * dir;
+    const delta = metrics(a)[state.sortKey] - metrics(b)[state.sortKey];
+    if (delta) return delta * dir;
+    return a.display.localeCompare(b.display);
+  });
+  return rows;
+}
+
+function chip(result) {
+  const node = el("span", "chip " + result.status);
+  node.append(result.tldDisplay || result.tld);
+  const method = el("small", null, result.method === "rdap" ? "RDAP" : "DNS");
+  node.append(method);
+  const confidence = result.confidence && result.confidence !== "none" ? " Confidence: " + result.confidence + "." : "";
+  node.title = (result.fqdn || "") + " — " + (result.detail || "") + confidence;
+  return node;
+}
+
+function mixBar(counts) {
+  const bar = el("div", "mix");
+  const total = Math.max(counts.total, 1);
+  [["reg", counts.registered], ["avail", counts.available], ["unk", counts.unknown]].forEach(([kind, value]) => {
+    if (!value) return;
+    const part = el("i", kind);
+    part.style.width = (value / total) * 100 + "%";
+    bar.append(part);
+  });
+  bar.title = counts.registered + " registered, " + counts.available + " available, " + counts.unknown + " unknown";
+  return bar;
+}
+
+const STATUS_NOTES = {
+  registered: "Registered at the registry, or showing public DNS records. RDAP is the registry’s own answer. DNS means the name has records.",
+  available: "RDAP available means the registry has no record. DNS available is only a hint: a registered name with no nameservers can look the same, and the name can still be premium or reserved.",
+  unknown: "The registry could not be reached and DNS was inconclusive or failed. A failed lookup stays unknown and is never called available.",
+};
+
+function fillChips(wrap, hits, nameAscii, status) {
+  hits.slice(0, CHIP_CAP).forEach((hit) => wrap.append(chip(hit)));
+  if (hits.length <= CHIP_CAP) return;
+  const more = el("button", "more-chips", "+" + (hits.length - CHIP_CAP).toLocaleString() + " more");
+  more.type = "button";
+  more.addEventListener("click", () => {
+    const open = state.focus && state.focus.ascii === nameAscii && state.focus.status === status;
+    state.focus = open ? null : { ascii: nameAscii, status: status };
+    render();
+  });
+  wrap.append(more);
+}
+
+function countCell(name, status, value, klass) {
+  const td = el("td", "num");
+  const open = !!(state.focus && state.focus.ascii === name.ascii && state.focus.status === status);
+  const button = el("button", "count-btn " + klass, String(value));
+  button.type = "button";
+  button.setAttribute("aria-pressed", open ? "true" : "false");
+  const word = status === "registered" ? "registered" : status === "available" ? "available" : "unknown";
+  button.setAttribute("aria-label", value + " " + word + (open ? ", hide list" : ", show TLDs"));
+  button.title = value ? (open ? "Hide this list" : "Show these TLDs") : "None yet";
+  if (!value) button.disabled = true;
+  button.addEventListener("click", () => {
+    state.focus = open ? null : { ascii: name.ascii, status: status };
+    render();
+  });
+  td.append(button);
+  return td;
+}
+
+function statusPanel(name, status) {
+  const hits = resultList(name, status);
+  const detail = el("tr", "detail");
+  const cell = el("td");
+  cell.colSpan = 7;
+  const title = status === "registered" ? "Registered" : status === "available" ? "Available" : "Unknown";
+  cell.append(el("p", "status-note", title + " · " + hits.length.toLocaleString() + ". " + STATUS_NOTES[status]));
+  const scroll = el("div", "status-panel");
+  const wrap = el("div", "chips");
+  if (!hits.length) wrap.append(el("span", "frac", "None yet."));
+  else hits.forEach((hit) => wrap.append(chip(hit)));
+  scroll.append(wrap);
+  cell.append(scroll);
+  detail.append(cell);
+  return detail;
+}
+
+function resultList(name, status) {
+  return tldsFor(name)
+    .map((tld) => state.results.get(cacheKey(labelFor(name), tld.ascii)))
+    .filter((hit) => hit && hit.status === status);
+}
+
+function renderTable() {
+  const table = document.getElementById("results");
+  const empty = document.getElementById("empty");
+  const legend = document.getElementById("legend");
+  if (!state.started) {
+    table.hidden = true;
+    empty.hidden = false;
+    legend.hidden = true;
+    renderPager(0);
+    return;
+  }
+  table.hidden = false;
+  empty.hidden = true;
+  legend.hidden = false;
+  document.querySelectorAll("thead button").forEach((button) => {
+    const active = button.dataset.sort === state.sortKey;
+    button.setAttribute("aria-sort", active ? (state.sortDir === "asc" ? "ascending" : "descending") : "none");
+    const label = button.dataset.sort === "name" ? (state.manual ? "Domain" : "Name") : button.dataset.sort[0].toUpperCase() + button.dataset.sort.slice(1);
+    button.textContent = label + (active ? (state.sortDir === "asc" ? " ↑" : " ↓") : "");
+  });
+  const tbody = document.getElementById("tbody");
+  tbody.replaceChildren();
+  const rows = visibleNames();
+  renderPager(rows.length);
+  const pageRows = state.showAll ? rows : rows.slice(state.page * PAGE_SIZE, (state.page + 1) * PAGE_SIZE);
+  if (!rows.length) {
+    const tr = el("tr");
+    const td = el("td", null, "No names match this filter.");
+    td.colSpan = 7;
+    tr.append(td);
+    tbody.append(tr);
+    return;
+  }
+  pageRows.forEach((name) => {
+    const counts = metrics(name);
+    const pick = isOpportunity(name);
+    const tr = el("tr", pick ? "opportunity" : "");
+    const nameCell = el("td");
+    const title = el("div", "name-line");
+    const button = el("button", "name-btn", name.display);
+    button.type = "button";
+    button.setAttribute("aria-expanded", state.expanded.has(name.ascii) ? "true" : "false");
+    button.addEventListener("click", () => {
+      if (state.expanded.has(name.ascii)) state.expanded.delete(name.ascii);
+      else state.expanded.add(name.ascii);
+      renderTable();
+    });
+    title.append(button);
+    if (pick) {
+      const badge = el("span", "pick", "Pick");
+      badge.title = "." + targetTld() + " is free, and .com or .ai is already taken.";
+      title.append(badge);
+    }
+    nameCell.append(title);
+    if (name.display !== name.ascii) nameCell.append(el("div", "subascii", name.ascii));
+    nameCell.append(mixBar(counts));
+    if (counts.done < counts.total) nameCell.append(el("div", "frac", counts.done + " / " + counts.total + " TLDs"));
+    tr.append(nameCell);
+    const scoreCell = el("td", "num score-cell");
+    const breakdown = scoreBreakdown(counts);
+    scoreCell.title = breakdown || "None of the weighted extensions are taken.";
+    scoreCell.append(el("span", null, String(counts.score)));
+    if (breakdown) scoreCell.append(el("span", "score-break", breakdown));
+    tr.append(scoreCell);
+    tr.append(countCell(name, "registered", counts.registered, "taken-ink"));
+    tr.append(countCell(name, "available", counts.available, "free-ink"));
+    tr.append(countCell(name, "unknown", counts.unknown, "unk-ink"));
+    const takenCell = el("td");
+    const takenWrap = el("div", "chips");
+    fillChips(takenWrap, resultList(name, "registered"), name.ascii, "registered");
+    takenCell.append(takenWrap);
+    const freeCell = el("td");
+    const freeWrap = el("div", "chips");
+    fillChips(freeWrap, resultList(name, "available"), name.ascii, "available");
+    freeCell.append(freeWrap);
+    tr.append(takenCell, freeCell);
+    tbody.append(tr);
+    if (state.focus && state.focus.ascii === name.ascii) {
+      tbody.append(statusPanel(name, state.focus.status));
+      return;
+    }
+    if (!state.expanded.has(name.ascii)) return;
+    const detail = el("tr", "detail");
+    const cell = el("td");
+    cell.colSpan = 7;
+    const scroll = el("div", "detail-scroll");
+    const inner = el("table", "detail-table");
+    const head = el("tr");
+    ["TLD", "Result", "Method", "Confidence", "What the lookup means"].forEach((label) => head.append(el("th", null, label)));
+    inner.append(head);
+    tldsFor(name).forEach((tld) => {
+      const hit = state.results.get(cacheKey(labelFor(name), tld.ascii));
+      const row = el("tr");
+      row.append(el("td", null, tld.display));
+      if (!hit) {
+        row.append(el("td", null, "Checking…"));
+        row.append(el("td"), el("td"), el("td"));
+      } else {
+        const word = hit.status === "registered" ? "Registered" : hit.status === "available" ? "Available" : "Unknown";
+        row.append(el("td", "status-word " + hit.status, word));
+        row.append(el("td", null, hit.method === "rdap" ? "RDAP" : "DNS hint"));
+        row.append(el("td", null, hit.confidence === "none" ? "—" : hit.confidence));
+        row.append(el("td", null, hit.detail || ""));
+      }
+      inner.append(row);
+    });
+    scroll.append(inner);
+    cell.append(scroll);
+    detail.append(cell);
+    tbody.append(detail);
+  });
+}
+
+function formatElapsed(ms) {
+  const sec = Math.max(0, Math.round(ms / 1000));
+  if (sec < 1) return "less than a second";
+  if (sec < 90) return sec === 1 ? "1 second" : sec + " seconds";
+  return formatDuration(ms);
+}
+
+function formatDuration(ms) {
+  const sec = Math.max(1, Math.round(ms / 1000));
+  if (sec < 90) return sec === 1 ? "1 second" : sec + " seconds";
+  const min = Math.max(1, Math.round(sec / 60));
+  if (min < 60) return min === 1 ? "1 minute" : min + " minutes";
+  const hr = Math.floor(min / 60);
+  const rem = min % 60;
+  const hours = hr === 1 ? "1 hour" : hr + " hours";
+  if (!rem) return hours;
+  const minutes = rem === 1 ? "1 minute" : rem + " minutes";
+  return hours + " " + minutes;
+}
+
+const HOUR_LOOKUPS = 780000;
+const PAGE_SIZE = 40;
+const SPOTLIGHT = ["com", "ai", "io", "co", "app", "dev", "net", "org", "xyz", "me", "uk", "de"];
+let clockTimer = 0;
+
+function elapsedNow() {
+  return state.elapsedMs + (state.segmentStart ? performance.now() - state.segmentStart : 0);
+}
+
+function paintElapsed() {
+  const node = document.getElementById("progress-elapsed");
+  if (!node) return;
+  if (!state.started) {
+    node.textContent = "";
+    return;
+  }
+  const text = formatElapsed(elapsedNow());
+  node.textContent = !state.running && state.lookupsDone >= state.lookupsTotal && state.lookupsTotal ? "Took " + text : "Elapsed " + text;
+}
+
+function beginSegment() {
+  if (!state.segmentStart) state.segmentStart = performance.now();
+  clearInterval(clockTimer);
+  clockTimer = setInterval(paintElapsed, 1000);
+  paintElapsed();
+}
+
+function endSegment() {
+  if (state.segmentStart) {
+    state.elapsedMs += performance.now() - state.segmentStart;
+    state.segmentStart = 0;
+  }
+  clearInterval(clockTimer);
+  paintElapsed();
+}
+
+function goToPage(nextPage) {
+  state.page = nextPage;
+  state.showAll = false;
+  renderTable();
+  const card = document.getElementById("table-card");
+  if (card) card.scrollIntoView({ block: "start" });
+}
+
+function renderPager(total) {
+  const bars = [document.getElementById("pager-top"), document.getElementById("pager-bottom")];
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (state.page >= pages) state.page = pages - 1;
+  if (state.page < 0) state.page = 0;
+  const visible = state.started && total > PAGE_SIZE;
+  bars.forEach((pager) => {
+    if (!pager) return;
+    pager.replaceChildren();
+    if (!visible) {
+      pager.hidden = true;
+      return;
+    }
+    pager.hidden = false;
+    if (state.showAll) {
+      pager.append(el("span", "pager-label", "Showing all " + total.toLocaleString() + " names"));
+      const paged = el("button", "ghost", "Show " + PAGE_SIZE + " per page");
+      paged.type = "button";
+      paged.addEventListener("click", () => goToPage(0));
+      pager.append(paged);
+      return;
+    }
+    const start = state.page * PAGE_SIZE + 1;
+    const end = Math.min(total, (state.page + 1) * PAGE_SIZE);
+    pager.append(el("span", "pager-label", "Showing " + start.toLocaleString() + "–" + end.toLocaleString() + " of " + total.toLocaleString()));
+    const prev = el("button", "ghost", "Previous");
+    prev.type = "button";
+    prev.disabled = state.page === 0;
+    prev.addEventListener("click", () => goToPage(state.page - 1));
+    const next = el("button", "ghost", "Next");
+    next.type = "button";
+    next.disabled = state.page >= pages - 1;
+    next.addEventListener("click", () => goToPage(state.page + 1));
+    const all = el("button", "ghost", "Show all names");
+    all.type = "button";
+    all.addEventListener("click", () => {
+      state.showAll = true;
+      renderTable();
+    });
+    pager.append(prev, next, all);
+  });
+}
+
+function trimTlds(keep) {
+  const tokens = tldsEl.value.split(/[\s,;]+/).map((item) => item.trim()).filter(Boolean);
+  tldsEl.value = tokens.slice(0, keep).join("\n");
+  sessionStorage.setItem(TLDS_KEY, tldsEl.value);
+  syncPresetFromText();
+  renderCoverage();
+}
+
+function showFitBanner(names, tlds, lookups, keep) {
+  bannerEl.replaceChildren();
+  const box = el("div", "banner");
+  box.append(names.toLocaleString() + " names × " + tlds.toLocaleString() + " extensions is " + lookups.toLocaleString() + " lookups. That is many hours. ");
+  const button = el("button", "primary", "Keep the first " + keep.toLocaleString() + " extensions");
+  button.type = "button";
+  button.addEventListener("click", () => {
+    trimTlds(keep);
+    showBanner("The list now has the " + keep.toLocaleString() + " largest extensions, sized for about an hour. Click Check.", false);
+  });
+  box.append(button);
+  bannerEl.append(box);
+}
+
+function etaPhrase() {
+  if (!state.runTotal || state.etaMs == null) return "Estimating time left…";
+  const lead = state.etaRough ? "Roughly " : "About ";
+  return lead + formatDuration(state.etaMs) + " left";
+}
+
+function seedEta(count) {
+  return (count / 150) * 1000;
+}
+
+let etaSamples = [];
+
+function renderProgress() {
+  const card = document.getElementById("progress-card");
+  const etaEl = document.getElementById("progress-eta");
+  if (!state.started) {
+    card.hidden = true;
+    return;
+  }
+  card.hidden = false;
+  const namesDone = state.names.filter((name) => metrics(name).done === tldsFor(name).length).length;
+  const totalNames = state.names.length;
+  const nameWord = state.manual ? " domains" : " names";
+  const label = document.getElementById("progress-label");
+  const detail = document.getElementById("progress-detail");
+  paintElapsed();
+  if (state.mode === "recheck") {
+    const done = state.runDone;
+    const total = state.runTotal;
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    document.getElementById("progress-bar").style.width = pct + "%";
+    label.textContent = "Rechecking unknowns";
+    const still = state.names.reduce((sum, name) => sum + metrics(name).unknown, 0);
+    if (!state.running && done >= total) {
+      etaEl.textContent = "";
+      const rechecked = total.toLocaleString() + " unknown" + (total === 1 ? "" : "s");
+      const left = still ? still.toLocaleString() + " still unknown" : "None left";
+      detail.textContent = total ? "Rechecked " + rechecked + ". " + left : "No unknowns to recheck";
+    } else if (state.running) {
+      etaEl.textContent = etaPhrase();
+      detail.textContent = "Rechecking unknowns · " + done.toLocaleString() + " / " + total.toLocaleString();
+    } else {
+      etaEl.textContent = "";
+      detail.textContent = "Recheck stopped at " + done.toLocaleString() + " / " + total.toLocaleString();
+    }
+    syncContinue();
+    document.title = state.running ? "Rechecking unknowns · Bulk TLD checker" : "Bulk TLD checker";
+    return;
+  }
+  const pct = state.lookupsTotal ? Math.round((state.lookupsDone / state.lookupsTotal) * 100) : 0;
+  document.getElementById("progress-bar").style.width = pct + "%";
+  label.textContent = namesDone + " / " + totalNames + nameWord;
+  if (!state.running && state.lookupsDone >= state.lookupsTotal) {
+    etaEl.textContent = "";
+    detail.textContent = state.lookupsTotal ? "Finished " + state.lookupsDone.toLocaleString() + " lookups" : "Nothing to look up";
+  } else if (state.running) {
+    etaEl.textContent = etaPhrase();
+    detail.textContent = "Scanning · " + state.lookupsDone.toLocaleString() + " / " + state.lookupsTotal.toLocaleString() + " lookups";
+  } else {
+    const left = Math.max(0, state.lookupsTotal - state.lookupsDone);
+    etaEl.textContent = left ? left.toLocaleString() + " lookups left" : "";
+    detail.textContent = "Stopped at " + state.lookupsDone.toLocaleString() + " / " + state.lookupsTotal.toLocaleString() + " lookups";
+  }
+  syncContinue();
+  document.title = state.running && state.runTotal ? etaPhrase() + " · Bulk TLD checker" : "Bulk TLD checker";
+}
+
+function renderStats() {
+  const box = document.getElementById("stats");
+  if (!state.started) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  let registered = 0;
+  let available = 0;
+  let unknown = 0;
+  let picks = 0;
+  state.names.forEach((name) => {
+    const counts = metrics(name);
+    registered += counts.registered;
+    available += counts.available;
+    unknown += counts.unknown;
+    if (isOpportunity(name)) picks += 1;
+  });
+  state.hasUnknown = unknown > 0;
+  const recheckBtn = document.getElementById("recheck");
+  recheckBtn.hidden = !state.hasUnknown && !(state.mode === "recheck" && state.running);
+  recheckBtn.disabled = !!state.running;
+  recheckBtn.textContent = state.running && state.mode === "recheck" ? "Rechecking…" : "Recheck unknowns";
+  box.replaceChildren();
+  [["Names", state.names.length, ""], ["Picks", picks, ""], ["Registered", registered, "taken-ink"], ["Available", available, "free-ink"], ["Unknown", unknown, "unk-ink"]].forEach(([label, value, klass]) => {
+    const pill = el("span", "pill");
+    pill.append(label + " ");
+    pill.append(el("b", klass, String(value)));
+    box.append(pill);
+  });
+}
+
+function renderSkipped() {
+  const host = document.getElementById("skipped");
+  host.replaceChildren();
+  if (!state.skippedCount && !state.duplicateCount) return;
+  const bits = [];
+  if (state.duplicateCount) bits.push(state.duplicateCount + (state.duplicateCount === 1 ? " duplicate" : " duplicates"));
+  if (state.skippedCount) {
+    const sample = state.skipped.slice(0, 6).map((item) => item.value + " (" + item.reason + ")").join(", ");
+    const extra = state.skippedCount > state.skipped.length ? " Showing the first " + state.skipped.length + "." : "";
+    bits.push(state.skippedCount + " skipped: " + sample + "." + extra);
+  }
+  host.append(el("div", "banner", bits.join(". ")));
+}
+
+function render() {
+  renderProgress();
+  renderStats();
+  renderSkipped();
+  renderTable();
+}
+
+function scheduleRender() {
+  if (!state.running) {
+    renderQueued = false;
+    render();
+    return;
+  }
+  if (renderQueued) return;
+  renderQueued = true;
+  setTimeout(() => {
+    renderQueued = false;
+    render();
+  }, 140);
+}
+
+function updateEta() {
+  const now = performance.now();
+  etaSamples.push({ t: now, n: state.runDone });
+  const cutoff = now - 15000;
+  while (etaSamples.length > 1 && etaSamples[0].t < cutoff) etaSamples.shift();
+  const elapsed = now - state.runStartedAt;
+  if (state.runDone < 8 || elapsed < 800) return;
+  const first = etaSamples[0];
+  const last = etaSamples[etaSamples.length - 1];
+  const span = last.t - first.t;
+  const gained = last.n - first.n;
+  const rate = span >= 1000 && gained >= 3 ? gained / span : state.runDone / elapsed;
+  const remaining = Math.max(0, state.runTotal - state.runDone);
+  const next = remaining / Math.max(rate, 0.000001);
+  state.etaMs = state.etaRough || state.etaMs == null ? next : state.etaMs * 0.8 + next * 0.2;
+  state.etaRough = false;
+}
+
+function applyResult(result, fromCache) {
+  const key = cacheKey(result.name, result.tld);
+  const isNew = !state.results.has(key);
+  state.results.set(key, result);
+  if (!fromCache) {
+    if (!cache[key]) cacheCount += 1;
+    cache[key] = result;
+    scheduleCacheFlush();
+    state.runDone += 1;
+    updateEta();
+  }
+  if (isNew) {
+    state.lookupsDone += 1;
+    const group = namesByLabel.get(result.name) || [];
+    if (!group.length) bumpMetric(rowForResult(result), result);
+    else group.forEach((name) => {
+      const owns = tldsFor(name).some((tld) => tld.ascii === result.tld);
+      if (owns) bumpMetric(name.ascii, result);
+      else applyInvestorHit(metricMemo.get(name.ascii), result);
+    });
+  }
+  const pending = state.names.find((name) => metrics(name).done < tldsFor(name).length);
+  state.currentName = pending ? pending.display : "";
+  scheduleRender();
+}
+
+function countFinished() {
+  let done = 0;
+  state.names.forEach((name) => {
+    tldsFor(name).forEach((tld) => {
+      if (state.results.has(cacheKey(labelFor(name), tld.ascii))) done += 1;
+    });
+  });
+  return done;
+}
+
+async function readError(response) {
+  try {
+    const data = await response.json();
+    return data.error || "Request failed.";
+  } catch (error) {
+    return "Request failed.";
+  }
+}
+
+async function runCheck(mode) {
+  if (state.running) return;
+  const fresh = mode === "unknowns";
+  if (mode === "unknowns") state.mode = "recheck";
+  else if (mode !== "continue") state.mode = "scan";
+  showBanner("");
+  state.controller = new AbortController();
+  document.getElementById("check").disabled = true;
+  document.getElementById("continue").hidden = true;
+  document.getElementById("stop").hidden = false;
+  document.getElementById("check").textContent = "Preparing…";
+  let parsed;
+  if (state.hosted && window.TldBrowser) {
+    parsed = state.listMode === "manual" ? TldBrowser.parseDomains(namesEl.value) : TldBrowser.parse(namesEl.value, tldsEl.value);
+  } else {
+    try {
+      const response = await fetch("/api/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ names: namesEl.value, tlds: tldsEl.value, manual: state.listMode === "manual" }),
+        signal: state.controller.signal,
+      });
+      parsed = await response.json();
+      if (!response.ok) throw new Error(parsed.error || "Could not read that list.");
+    } catch (error) {
+      if (error.name !== "AbortError") showBanner(error.message || "Could not reach the local checker.", true);
+      finishRun(false);
+      return;
+    }
+  }
+  state.skipped = parsed.skipped || [];
+  state.skippedCount = parsed.skippedCount || 0;
+  state.duplicateCount = parsed.duplicateCount || 0;
+  state.publication = parsed.publication || state.publication;
+  state.suffixCount = parsed.suffixCount || state.suffixCount;
+  if (parsed.error) {
+    showBanner(parsed.error, true);
+    renderSkipped();
+    finishRun(false);
+    return;
+  }
+  state.names = parsed.names || [];
+  state.manual = state.listMode === "manual" || !!parsed.manual;
+  state.tlds = state.manual ? [] : (parsed.tlds || []);
+  const planned = state.names.reduce((sum, name) => sum + tldsFor(name).length, 0);
+  if (!state.manual && planned > HOUR_LOOKUPS) {
+    const keep = Math.max(12, Math.floor(HOUR_LOOKUPS / Math.max(state.names.length, 1)));
+    showFitBanner(state.names.length, state.tlds.length, planned, Math.min(keep, state.tlds.length));
+    state.controller = null;
+    document.getElementById("check").disabled = false;
+    document.getElementById("check").textContent = "Check";
+    document.getElementById("stop").hidden = true;
+    const recheckBtn = document.getElementById("recheck");
+    recheckBtn.disabled = false;
+    recheckBtn.textContent = "Recheck unknowns";
+    syncContinue();
+    return;
+  }
+  state.bootstrapError = parsed.bootstrapError || null;
+  if (parsed.bootstrapError) showBanner(parsed.bootstrapError + " Every TLD will use a DNS hint.", false);
+  state.started = true;
+  state.page = 0;
+  state.results = new Map();
+  state.focus = null;
+  if (mode !== "continue") {
+    endSegment();
+    state.elapsedMs = 0;
+    state.segmentStart = 0;
+  }
+  state.lookupsTotal = state.names.reduce((sum, name) => sum + tldsFor(name).length, 0);
+  state.lookupsDone = 0;
+  const lanes = state.names.map((name) => {
+    const pairs = [];
+    const label = labelFor(name);
+    tldsFor(name).forEach((tld) => {
+      const key = cacheKey(label, tld.ascii);
+      const hit = cache[key];
+      if (hit && hit.status) state.results.set(key, hit);
+      else pairs.push({ name: label, display: name.display, tld: tld.ascii, tldDisplay: tld.display, row: name.ascii });
+    });
+    return pairs;
+  });
+  const needed = window.TldBrowser ? TldBrowser.interleave(lanes) : lanes.flat();
+  recomputeMetrics();
+  state.lookupsDone = state.results.size;
+  etaSamples = [];
+  state.runStartedAt = performance.now();
+  state.runDone = 0;
+  state.runTotal = needed.length;
+  state.etaRough = true;
+  state.etaMs = needed.length ? seedEta(needed.length) : null;
+  state.running = needed.length > 0;
+  const pending = state.names.find((name) => metrics(name).done < tldsFor(name).length);
+  state.currentName = pending ? pending.display : "";
+  render();
+  if (!needed.length) {
+    if (state.mode === "recheck") showBanner("No unknowns are left to recheck.", false);
+    finishRun(true);
+    return;
+  }
+  document.getElementById("check").textContent = state.mode === "recheck" ? "Rechecking…" : "Checking…";
+  beginSegment();
+  if (state.mode === "recheck") {
+    const noun = needed.length === 1 ? "unknown lookup" : "unknown lookups";
+    showBanner("Rechecking " + needed.length.toLocaleString() + " " + noun + ".", false);
+    document.getElementById("progress-card").scrollIntoView({ block: "center" });
+  }
+  try {
+    if (state.hosted && window.TldBrowser) {
+      await TldBrowser.checkAll(needed, {
+        signal: state.controller.signal,
+        onResult: (event) => applyResult(event, false),
+      });
+    } else {
+      for (let index = 0; index < needed.length; index += CHECK_CHUNK) {
+        if (state.controller.signal.aborted) break;
+        const response = await fetch("/api/check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+          body: JSON.stringify({ checks: needed.slice(index, index + CHECK_CHUNK), fresh: fresh }),
+          signal: state.controller.signal,
+        });
+        if (!response.ok || !response.body) throw new Error(await readError(response));
+        await readStream(response.body);
+      }
+    }
+  } catch (error) {
+    if (error.name !== "AbortError") showBanner(error.message || "The check stopped because a lookup request failed.", true);
+  }
+  finishRun(true);
+}
+
+async function readStream(stream) {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const chunk = await reader.read();
+    if (chunk.done) break;
+    buffer += decoder.decode(chunk.value, { stream: true });
+    let splitAt = buffer.indexOf("\n\n");
+    while (splitAt >= 0) {
+      const raw = buffer.slice(0, splitAt);
+      buffer = buffer.slice(splitAt + 2);
+      const data = raw.split("\n").filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("\n");
+        if (data) {
+        try {
+          const event = JSON.parse(data);
+          if (event.type === "result") applyResult(event, false);
+          if (event.type === "meta" && event.bootstrapError) showBanner(event.bootstrapError + " Every TLD will use a DNS hint.", false);
+        } catch (error) {
+          /* ignore a truncated event and keep reading */
+        }
+      }
+      splitAt = buffer.indexOf("\n\n");
+    }
+  }
+  sessionStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+}
+
+function syncContinue() {
+  const button = document.getElementById("continue");
+  const paused = state.started && !state.running && state.lookupsDone < state.lookupsTotal;
+  button.hidden = !paused;
+}
+
+function finishRun(keepResults) {
+  endSegment();
+  state.running = false;
+  state.controller = null;
+  document.getElementById("check").disabled = false;
+  document.getElementById("check").textContent = "Check";
+  document.getElementById("stop").hidden = true;
+  const recheckBtn = document.getElementById("recheck");
+  recheckBtn.disabled = false;
+  recheckBtn.textContent = "Recheck unknowns";
+  syncContinue();
+  if (keepResults && state.mode === "recheck" && state.runTotal && state.runDone >= state.runTotal) {
+    const still = state.names.reduce((sum, name) => sum + metrics(name).unknown, 0);
+    showBanner(still
+      ? "Recheck finished. " + still.toLocaleString() + (still === 1 ? " is still unknown." : " are still unknown.")
+      : "Recheck finished. Nothing is still unknown.", false);
+  }
+  if (keepResults) scheduleRender();
+}
+
+function presetTokens(id) {
+  return (state.presetText[id] || "").split(/[\s,;]+/).map((item) => item.trim().toLowerCase()).filter(Boolean);
+}
+
+function lookupStatus(name, tld) {
+  const hit = state.results.get(cacheKey(labelFor(name), tld));
+  if (!hit) return "Not checked";
+  if (hit.status === "registered") return "Taken";
+  if (hit.status === "available") return "Free";
+  return "Unknown";
+}
+
+function groupScore(name, tlds) {
+  const score = { taken: 0, free: 0, unknown: 0, checked: 0, total: tlds.length, takenNames: [] };
+  tlds.forEach((tld) => {
+    const word = lookupStatus(name, tld);
+    if (word === "Not checked") return;
+    score.checked += 1;
+    if (word === "Taken") {
+      score.taken += 1;
+      score.takenNames.push(tld);
+    } else if (word === "Free") score.free += 1;
+    else score.unknown += 1;
+  });
+  return score;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+}
+
+function reportNames() {
+  return state.names.slice().sort((a, b) => {
+    const delta = metrics(b).score - metrics(a).score;
+    if (delta) return delta;
+    const taken = metrics(b).registered - metrics(a).registered;
+    if (taken) return taken;
+    return a.display.localeCompare(b.display);
+  });
+}
+
+function summaryCsv() {
+  const launch = presetTokens("launch");
+  const famous = presetTokens("famous");
+  const countries = presetTokens("countries");
+  const notes = [
+    ["What this file is", "One row per name. Taken means registered. Free means the check found no registration. Unknown means the lookup did not answer, so it is not called free."],
+    ["Launch", "Launch is the short list of " + launch.length + " extensions worth buying for a new product. Launch taken is how many of that list are already registered. The list is: " + launch.join(" ")],
+    ["Famous", "Famous is the " + famous.length + " largest zones, ranked by how many domains are registered in each. Famous taken is how many of that list are already registered."],
+    ["Countries", "Countries is the " + countries.length + " largest country-code extensions. Countries taken is how many of that list are already registered."],
+    ["Free", "RDAP free is the registry’s own answer. DNS free is only a hint, because a registered name with no nameservers can look the same."],
+    ["Investor score", "Investor score adds the weights of extensions that are already taken: " + weightPhrase() + ". Free and unknown add nothing."],
+    ["Pick", "A pick is a name whose target extension is free while .com or .ai is taken. The target for this export is ." + (targetTld() || "(none)") + "."],
+  ];
+  const header = ["Name", "Investor score", "Weighted extensions taken", "Pick", "Taken", "Free", "Unknown", "Launch taken", "Launch list size", "Launch checked", "Launch taken names", "Famous taken", "Famous list size", "Famous checked", "Countries taken", "Countries list size", "Countries checked"]
+    .concat(SPOTLIGHT.map((tld) => "." + tld));
+  const lines = notes.map((row) => row.map(csvEscape).join(","));
+  lines.push(header.map(csvEscape).join(","));
+  reportNames().forEach((name) => {
+    const counts = metrics(name);
+    const launchScore = groupScore(name, launch);
+    const famousScore = groupScore(name, famous);
+    const countryScore = groupScore(name, countries);
+    const row = [
+      name.display, counts.score, scoreBreakdown(counts), isOpportunity(name) ? "Pick" : "",
+      counts.registered, counts.available, counts.unknown,
+      launchScore.taken, launchScore.total, launchScore.checked, launchScore.takenNames.join(" "),
+      famousScore.taken, famousScore.total, famousScore.checked,
+      countryScore.taken, countryScore.total, countryScore.checked,
+    ].concat(SPOTLIGHT.map((tld) => lookupStatus(name, tld)));
+    lines.push(row.map(csvEscape).join(","));
+  });
+  return lines.join("\n") + "\n";
+}
+
+function groupPhrase(score) {
+  if (!score.total) return "List not loaded";
+  if (score.checked < score.total) return score.taken + " taken · " + score.checked + " of " + score.total + " checked";
+  return score.taken + " of " + score.total + " taken";
+}
+
+function buildReportHtml() {
+  const launch = presetTokens("launch");
+  const famous = presetTokens("famous");
+  const countries = presetTokens("countries");
+  const names = reportNames();
+  const rows = names.map((name) => {
+    const counts = metrics(name);
+    const launchScore = groupScore(name, launch);
+    const famousScore = groupScore(name, famous);
+    const countryScore = groupScore(name, countries);
+    const spots = SPOTLIGHT.map((tld) => {
+      const word = lookupStatus(name, tld);
+      const klass = word === "Taken" ? "taken" : word === "Free" ? "free" : word === "Unknown" ? "unknown" : "miss";
+      return "<td class=\"" + klass + "\">" + escapeHtml(word) + "</td>";
+    }).join("");
+    const pick = isOpportunity(name);
+    return "<tr" + (pick ? " class=\"pick-row\"" : "") + "><td class=\"name\">" + escapeHtml(name.display) + (pick ? " · Pick" : "") + "</td><td class=\"num\">" + counts.score + "</td><td>" + escapeHtml(scoreBreakdown(counts)) + "</td><td>" + (pick ? "Pick" : "") + "</td><td class=\"num taken\">" + counts.registered + "</td><td class=\"num free\">" + counts.available + "</td><td class=\"num unknown\">" + counts.unknown + "</td><td>" + escapeHtml(groupPhrase(launchScore)) + "</td><td>" + escapeHtml(groupPhrase(famousScore)) + "</td><td>" + escapeHtml(groupPhrase(countryScore)) + "</td>" + spots + "</tr>";
+  }).join("");
+  const spotHead = SPOTLIGHT.map((tld) => "<th>." + escapeHtml(tld) + "</th>").join("");
+  const when = new Date().toLocaleString();
+  const sheet = summaryCsv();
+  return "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>TLD check report</title><style>"
+    + "body{margin:0;background:#f6f1ea;color:#1e1a16;font:15px/1.45 'Segoe UI',Helvetica,sans-serif}"
+    + "main{width:min(1280px,calc(100% - 32px));margin:0 auto;padding:28px 0 64px}"
+    + "h1{font:600 32px Palatino,Georgia,serif;margin:0 0 6px} h2{font:600 22px Palatino,Georgia,serif;margin:28px 0 8px}"
+    + "p{margin:0 0 8px;color:#5f574e} .actions{display:flex;gap:8px;margin:16px 0}"
+    + "button{font:inherit;border-radius:999px;padding:8px 14px;border:1px solid #e4d9cb;background:#fffdf8;cursor:pointer}"
+    + "button.primary{background:#1b4f3a;color:#f4faf6;border-color:transparent;font-weight:700}"
+    + "table{width:100%;border-collapse:collapse;background:#fffdf8;border-radius:12px;overflow:hidden}"
+    + "th,td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid #e4d9cb;font-size:13px}"
+    + "th{font-size:12px;color:#5f574e} td.num{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}"
+    + "td.name{font-weight:700} .taken{color:#9c3418} .free{color:#0e6a3b} .unknown{color:#8a5a0d} .miss{color:#8a8176}"
+    + "tr.pick-row td{background:#e7f6ee}"
+    + "@media print{body{background:#fff}.actions{display:none}}"
+    + "</style></head><body><main>"
+    + "<h1>TLD check report</h1><p>" + escapeHtml(when) + " · " + names.length + " names in this view. Target ." + escapeHtml(targetTld() || "(none)") + ".</p>"
+    + "<div class=\"actions\"><button class=\"primary\" id=\"print-btn\" type=\"button\">Print or save as PDF</button><button id=\"sheet-btn\" type=\"button\">Download spreadsheet</button></div>"
+    + "<h2>What the numbers mean</h2>"
+    + "<p><strong>Launch (" + launch.length + ")</strong> is the short list worth buying for a new product. “12 taken of " + launch.length + "” means 12 of those extensions are already registered. The list is: " + escapeHtml(launch.join(", ") || "not loaded") + ".</p>"
+    + "<p><strong>Famous (" + famous.length + ")</strong> is the largest zones, ranked by how many domains are registered in each. The number is how many of that list are already taken for the name.</p>"
+    + "<p><strong>Countries (" + countries.length + ")</strong> is the largest country-code extensions. The number is how many of that list are already taken.</p>"
+    + "<p><strong>Taken</strong> means registered. <strong>Free</strong> means the check found no registration. A free RDAP answer comes from the registry. A free DNS answer is only a hint. <strong>Unknown</strong> means the lookup did not answer, so it is not called free. <strong>Not checked</strong> means that extension was not in this scan.</p>"
+    + "<p><strong>Investor score</strong> adds the weights of extensions that are already taken: " + escapeHtml(weightPhrase()) + ". Free and unknown add nothing. <strong>Pick</strong> means the target extension (." + escapeHtml(targetTld() || "none") + ") is free while .com or .ai is taken.</p>"
+    + "<h2>Each name</h2><div style=\"overflow:auto\"><table><thead><tr><th>Name</th><th>Score</th><th>Weighted taken</th><th>Pick</th><th>Taken</th><th>Free</th><th>Unknown</th><th>Launch</th><th>Famous</th><th>Countries</th>" + spotHead + "</tr></thead><tbody>"
+    + rows + "</tbody></table></div>"
+    + "<textarea id=\"sheet\" hidden>" + escapeHtml(sheet) + "</textarea>"
+    + "<" + "script>document.getElementById('print-btn').onclick=function(){print()};document.getElementById('sheet-btn').onclick=function(){var text=document.getElementById('sheet').value;var blob=new Blob([text],{type:'text/csv;charset=utf-8'});var link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download='tld-summary.csv';link.click();};</" + "script>"
+    + "</main></body></html>";
+}
+
+function exportReport() {
+  if (!state.started || !state.names.length) {
+    showBanner("Run a check first, then export the report.", true);
+    return;
+  }
+  const blob = new Blob([buildReportHtml()], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const opened = window.open(url, "_blank");
+  if (!opened) {
+    const link = el("a");
+    link.href = url;
+    link.download = "tld-report.html";
+    link.click();
+    showBanner("The report downloaded as tld-report.html. Open it in the browser, then use Print or save as PDF.", false);
+  }
+}
+
+function csvEscape(value) {
+  const text = String(value ?? "");
+  if (/[",\n]/.test(text)) return '"' + text.replace(/"/g, '""') + '"';
+  return text;
+}
+
+document.getElementById("check").addEventListener("click", () => runCheck("cached"));
+document.getElementById("continue").addEventListener("click", () => runCheck("continue"));
+document.getElementById("stop").addEventListener("click", () => {
+  if (state.controller) state.controller.abort();
+});
+document.getElementById("example").addEventListener("click", () => {
+  namesEl.value = state.listMode === "manual" ? "si.si\nme.io\nalpha.dev\nexample.com\n" : "example\ngoogle\nmyapp\nbrandname\n";
+  scheduleDraft();
+  renderCoverage();
+});
+document.querySelectorAll(".mode").forEach((button) => {
+  button.addEventListener("click", () => setMode(button.dataset.mode));
+});
+document.querySelectorAll(".preset").forEach((button) => {
+  button.addEventListener("click", () => applyPreset(button.dataset.preset));
+});
+document.getElementById("recheck").addEventListener("click", () => {
+  let removed = 0;
+  Object.keys(cache).forEach((key) => {
+    if (cache[key] && cache[key].status === "unknown") {
+      delete cache[key];
+      removed += 1;
+    }
+  });
+  cacheCount = Math.max(0, cacheCount - removed);
+  scheduleCacheFlush();
+  const button = document.getElementById("recheck");
+  button.disabled = true;
+  button.textContent = "Rechecking…";
+  const detail = document.getElementById("progress-detail");
+  detail.textContent = "Rechecking unknowns…";
+  document.getElementById("progress-label").textContent = "Rechecking unknowns";
+  document.getElementById("progress-bar").style.width = "0%";
+  document.getElementById("progress-card").hidden = false;
+  document.getElementById("progress-card").scrollIntoView({ block: "center" });
+  runCheck("unknowns");
+});
+document.getElementById("clear-cache").addEventListener("click", () => {
+  cache = {};
+  sessionStorage.removeItem(CACHE_KEY);
+  showBanner("Cleared results remembered in this tab.", false);
+});
+document.getElementById("export").addEventListener("click", exportReport);
+document.getElementById("search").addEventListener("input", () => { state.page = 0; scheduleRender(); });
+document.getElementById("filter").addEventListener("change", () => { state.page = 0; scheduleRender(); });
+document.getElementById("target").addEventListener("input", () => {
+  sessionStorage.setItem(TARGET_KEY, document.getElementById("target").value);
+  state.page = 0;
+  scheduleRender();
+});
+document.querySelectorAll("thead button").forEach((button) => {
+  button.addEventListener("click", () => {
+    const key = button.dataset.sort;
+    if (state.sortKey === key) state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+    else {
+      state.sortKey = key;
+      state.sortDir = key === "name" ? "asc" : "desc";
+    }
+    renderTable();
+  });
+});
+namesEl.addEventListener("input", scheduleDraft);
+tldsEl.addEventListener("input", scheduleDraft);
+document.addEventListener("keydown", (event) => {
+  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+    event.preventDefault();
+    runCheck("cached");
+  }
+});
+
+function setMode(mode) {
+  state.listMode = mode === "manual" ? "manual" : "bulk";
+  sessionStorage.setItem(MODE_KEY, state.listMode);
+  const manual = state.listMode === "manual";
+  document.getElementById("mode-bulk").classList.toggle("is-on", !manual);
+  document.getElementById("mode-manual").classList.toggle("is-on", manual);
+  document.getElementById("mode-bulk").setAttribute("aria-pressed", manual ? "false" : "true");
+  document.getElementById("mode-manual").setAttribute("aria-pressed", manual ? "true" : "false");
+  document.querySelector(".editors").classList.toggle("manual", manual);
+  document.getElementById("names-label").textContent = manual ? "Domains" : "Names";
+  namesEl.placeholder = manual ? "One domain per line" : "One name per line";
+  document.getElementById("name-hint").innerHTML = manual ? MANUAL_HINT : BULK_HINT;
+  document.getElementById("mode-note").textContent = manual
+    ? "Each line is one domain. si.si is not also checked as si.com."
+    : "Each name is checked on every extension in the TLD box.";
+  renderCoverage();
+}
+
+const savedNames = sessionStorage.getItem(NAMES_KEY);
+const savedTlds = sessionStorage.getItem(TLDS_KEY);
+const savedTarget = sessionStorage.getItem(TARGET_KEY);
+if (savedNames != null) namesEl.value = savedNames;
+if (savedTlds != null) tldsEl.value = savedTlds;
+if (savedTarget != null) document.getElementById("target").value = savedTarget;
+setMode(sessionStorage.getItem(MODE_KEY) || "bulk");
+loadDirectory();
+</script>
+</body>
+</html>

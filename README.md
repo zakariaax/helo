@@ -38,7 +38,9 @@ You can still edit or paste your own list. **Bulk names** checks every name on e
 
 ## Setup
 
-The public site is [https://zakariaax.github.io/helo/](https://zakariaax.github.io/helo/). It runs in the browser, with no install.
+The public checker is [https://zakariaax.github.io/helo/](https://zakariaax.github.io/helo/). It runs in the browser, with no install.
+
+The signed-in app runs on Cloudflare Workers. Accounts, saved lists, and the admin user list live in a D1 database. The heavy TLD scan still runs in the browser. The first account to sign up is the admin. Later accounts are users, and an admin can promote them. Deploy with `npm install` and `npx wrangler deploy` after `CLOUDFLARE_API_TOKEN` is set. Do not put that token in a file.
 
 To run the same page on this computer:
 
@@ -46,7 +48,17 @@ To run the same page on this computer:
 python3 server.py
 ```
 
-Open http://127.0.0.1:8765. The local server listens on this machine only.
+Open http://127.0.0.1:8765. The local server listens on this machine only. That page is the checker without accounts.
+
+To run the signed-in app on this computer:
+
+```bash
+npm install
+npx wrangler d1 migrations apply helo --local
+npm run dev
+```
+
+Open http://127.0.0.1:8787.
 
 ## Tests
 

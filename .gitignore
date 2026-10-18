@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 .rdap-bootstrap.json
+node_modules
+.wrangler
+.dev.vars
