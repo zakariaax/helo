@@ -232,6 +232,14 @@
   }
   .banner.bad { background: color-mix(in srgb, var(--error) 16%, transparent); color: var(--error-ink); }
   .table-card { padding: 0; overflow: auto; }
+  .select-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; }
+  .select-bar .count-note { color: var(--text-2); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .select-bar .flash { color: var(--success-ink); font-size: 13px; font-weight: 600; }
+  .select-bar .primary:disabled, .select-bar .ghost:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; background-clip: padding-box; }
+  th.sel, td.sel { width: 1%; padding-right: 0; vertical-align: top; user-select: none; -webkit-user-select: none; }
+  td.sel { padding-top: 18px; }
+  .sel input { width: 18px; height: 18px; margin: 0; cursor: pointer; accent-color: var(--primary); }
+  tr.is-selected > td { background: var(--primary-8); }
   table { width: 100%; border-collapse: collapse; min-width: 980px; }
   tbody tr { transition: background-color .15s; }
   tbody tr:hover > td { background: var(--hover); }
@@ -416,6 +424,14 @@
   </div>
   <div class="stats" id="stats" hidden></div>
   <div id="skipped"></div>
+  <div class="select-bar" id="select-bar" hidden>
+    <button class="ghost" type="button" id="select-available">Select available</button>
+    <button class="ghost" type="button" id="copy-selected" disabled>Copy selected</button>
+    <button class="primary" type="button" id="deep-scan" disabled title="Check the selected names on every extension in the TLD box">Deep scan</button>
+    <button class="ghost" type="button" id="clear-selection" hidden>Clear selection</button>
+    <span class="count-note" id="select-count"></span>
+    <span class="flash" id="select-flash" role="status"></span>
+  </div>
   <div class="pager" id="pager-top" hidden></div>
 
   <section class="card table-card" id="table-card">
@@ -423,6 +439,7 @@
     <table id="results" hidden>
       <thead>
         <tr>
+          <th class="sel"><input type="checkbox" id="select-page" aria-label="Select every name on this page"></th>
           <th><button type="button" data-sort="name">Name</button></th>
           <th class="num"><button type="button" data-sort="score">Score</button></th>
           <th class="num"><button type="button" data-sort="registered">Registered</button></th>
@@ -461,6 +478,7 @@ const namesEl = document.getElementById("names");
 const tldsEl = document.getElementById("tlds");
 const bannerEl = document.getElementById("banner");
 const state = {
+  selected: new Set(),
   names: [],
   tlds: [],
   results: new Map(),
@@ -679,6 +697,7 @@ function markHosted() {
 async function loadDirectory() {
   let hosted = false;
   try {
+    if (window.HELO_APP) throw new Error("signed-in app has no checker server");
     const response = await fetch("/api/defaults");
     if (!response.ok) throw new Error("defaults");
     installPresetPayload(await response.json());
@@ -688,6 +707,7 @@ async function loadDirectory() {
       showBanner("The checker server is not responding. From this folder run python3 server.py and open http://127.0.0.1:8765.", true);
     } else {
       try {
+        if (window.HELO_APP && TldBrowser.setRdapProxy) TldBrowser.setRdapProxy("/api/rdap");
         installPresetPayload(await TldBrowser.loadDefaults());
         hosted = true;
         markHosted();
@@ -942,7 +962,7 @@ function statusPanel(name, status) {
   const hits = resultList(name, status);
   const detail = el("tr", "detail");
   const cell = el("td");
-  cell.colSpan = 7;
+  cell.colSpan = 8;
   const title = status === "registered" ? "Registered" : status === "available" ? "Available" : "Unknown";
   cell.append(el("p", "status-note", title + " · " + hits.length.toLocaleString() + ". " + STATUS_NOTES[status]));
   const scroll = el("div", "status-panel");
@@ -961,11 +981,119 @@ function resultList(name, status) {
     .filter((hit) => hit && hit.status === status);
 }
 
+/* ---------- Selection, copy, deep scan ---------- */
+function selectedNames() {
+  return state.names.filter((name) => state.selected.has(name.ascii));
+}
+
+/* Rows with at least one free extension. In manual mode that is every free domain. */
+function availableRows() {
+  return state.names.filter((name) => metrics(name).available > 0);
+}
+
+function availableDomains() {
+  const out = [];
+  state.names.forEach((name) => {
+    resultList(name, "available").forEach((hit) => {
+      out.push(state.manual ? name.display : (name.display + "." + (hit.tldDisplay || hit.tld)));
+    });
+  });
+  return [...new Set(out)];
+}
+
+function paintSelection(pageRows) {
+  const bar = document.getElementById("select-bar");
+  bar.hidden = !state.started;
+  const count = state.selected.size;
+  const freeRows = state.started ? availableRows() : [];
+  const allPicked = freeRows.length > 0 && freeRows.every((name) => state.selected.has(name.ascii));
+  const selectAvailable = document.getElementById("select-available");
+  selectAvailable.textContent = (allPicked ? "Available selected" : "Select available") + (freeRows.length ? " (" + freeRows.length.toLocaleString() + ")" : "");
+  selectAvailable.disabled = !freeRows.length || allPicked;
+  const copySelected = document.getElementById("copy-selected");
+  copySelected.textContent = "Copy selected" + (count ? " (" + count.toLocaleString() + ")" : "");
+  copySelected.disabled = !count;
+  const deep = document.getElementById("deep-scan");
+  deep.textContent = "Deep scan" + (count ? " (" + count.toLocaleString() + ")" : "");
+  deep.disabled = !count || !!state.running;
+  document.getElementById("clear-selection").hidden = !count;
+  document.getElementById("select-count").textContent = count ? count.toLocaleString() + " selected" : "Tick names to copy or deep scan them. Shift-click selects a range.";
+  const head = document.getElementById("select-page");
+  const rows = pageRows || [];
+  const onPage = rows.filter((name) => state.selected.has(name.ascii)).length;
+  head.checked = rows.length > 0 && onPage === rows.length;
+  head.indeterminate = onPage > 0 && onPage < rows.length;
+  head.disabled = !rows.length;
+  head._rows = rows;
+}
+
+let flashTimer = 0;
+function flash(text) {
+  const node = document.getElementById("select-flash");
+  node.textContent = text;
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { node.textContent = ""; }, 2600);
+}
+
+async function copyText(lines, label) {
+  const text = lines.join("\n");
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (error) {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.append(area);
+    area.select();
+    document.execCommand("copy");
+    area.remove();
+  }
+  flash("Copied " + lines.length.toLocaleString() + " " + label + ".");
+}
+
+function deepScan() {
+  const picked = selectedNames();
+  if (!picked.length || state.running) return;
+  /* A manual row like bafas.si becomes the name "bafas", checked on every extension in the TLD box. */
+  const labels = [...new Set(picked.map((name) => labelFor(name)))];
+  if (!tldsEl.value.trim()) applyPreset("famous");
+  setMode("bulk");
+  namesEl.value = labels.join("\n") + "\n";
+  sessionStorage.setItem(NAMES_KEY, namesEl.value);
+  sessionStorage.setItem(TLDS_KEY, tldsEl.value);
+  namesEl.dispatchEvent(new Event("input"));
+  state.selected = new Set();
+  renderCoverage();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  /* Click Check so the signed-in app's daily-limit guard runs as usual. */
+  document.getElementById("check").click();
+}
+
+document.getElementById("select-page").addEventListener("change", (event) => {
+  const rows = event.target._rows || [];
+  rows.forEach((name) => {
+    if (event.target.checked) state.selected.add(name.ascii);
+    else state.selected.delete(name.ascii);
+  });
+  renderTable();
+});
+document.getElementById("select-available").addEventListener("click", () => {
+  const rows = availableRows();
+  rows.forEach((name) => state.selected.add(name.ascii));
+  renderTable();
+  flash("Selected " + rows.length.toLocaleString() + (state.manual ? " available domains." : " names with a free extension."));
+});
+document.getElementById("copy-selected").addEventListener("click", () => copyText(selectedNames().map((name) => name.display), state.manual ? "domains" : "names"));
+document.getElementById("clear-selection").addEventListener("click", () => { state.selected = new Set(); renderTable(); });
+document.getElementById("deep-scan").addEventListener("click", deepScan);
+
 function renderTable() {
   const table = document.getElementById("results");
   const empty = document.getElementById("empty");
   const legend = document.getElementById("legend");
   if (!state.started) {
+    document.getElementById("select-bar").hidden = true;
     table.hidden = true;
     empty.hidden = false;
     legend.hidden = true;
@@ -986,10 +1114,11 @@ function renderTable() {
   const rows = visibleNames();
   renderPager(rows.length);
   const pageRows = state.showAll ? rows : rows.slice(state.page * PAGE_SIZE, (state.page + 1) * PAGE_SIZE);
+  paintSelection(pageRows);
   if (!rows.length) {
     const tr = el("tr");
     const td = el("td", null, "No names match this filter.");
-    td.colSpan = 7;
+    td.colSpan = 8;
     tr.append(td);
     tbody.append(tr);
     return;
@@ -997,7 +1126,37 @@ function renderTable() {
   pageRows.forEach((name) => {
     const counts = metrics(name);
     const pick = isOpportunity(name);
-    const tr = el("tr", pick ? "opportunity" : "");
+    const tr = el("tr", (pick ? "opportunity" : "") + (state.selected.has(name.ascii) ? " is-selected" : ""));
+    const selCell = el("td", "sel");
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = state.selected.has(name.ascii);
+    box.setAttribute("aria-label", "Select " + name.display);
+    box.addEventListener("click", (event) => {
+      const anchor = state.selectAnchor;
+      state.selectAnchor = name.ascii;
+      /* Shift-click: tick or untick every row between the last clicked row and this one. */
+      if (event.shiftKey && anchor && anchor !== name.ascii) {
+        const order = rows.map((row) => row.ascii);
+        const from = order.indexOf(anchor);
+        const to = order.indexOf(name.ascii);
+        if (from >= 0 && to >= 0) {
+          const [lo, hi] = from < to ? [from, to] : [to, from];
+          order.slice(lo, hi + 1).forEach((ascii) => {
+            if (box.checked) state.selected.add(ascii);
+            else state.selected.delete(ascii);
+          });
+          renderTable();
+          return;
+        }
+      }
+      if (box.checked) state.selected.add(name.ascii);
+      else state.selected.delete(name.ascii);
+      tr.classList.toggle("is-selected", box.checked);
+      paintSelection(pageRows);
+    });
+    selCell.append(box);
+    tr.append(selCell);
     const nameCell = el("td");
     const title = el("div", "name-line");
     const button = el("button", "name-btn", name.display);
@@ -1045,7 +1204,7 @@ function renderTable() {
     if (!state.expanded.has(name.ascii)) return;
     const detail = el("tr", "detail");
     const cell = el("td");
-    cell.colSpan = 7;
+    cell.colSpan = 8;
     const scroll = el("div", "detail-scroll");
     const inner = el("table", "detail-table");
     const head = el("tr");
@@ -1442,6 +1601,8 @@ async function runCheck(mode) {
     return;
   }
   state.names = parsed.names || [];
+  const stillThere = new Set(state.names.map((name) => name.ascii));
+  state.selected = new Set([...state.selected].filter((ascii) => stillThere.has(ascii)));
   state.manual = state.listMode === "manual" || !!parsed.manual;
   state.tlds = state.manual ? [] : (parsed.tlds || []);
   const planned = state.names.reduce((sum, name) => sum + tldsFor(name).length, 0);

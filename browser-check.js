@@ -16,7 +16,9 @@
   const POSITIVE = { 1: 1, 2: 1, 5: 1, 15: 1, 16: 1, 28: 1, 33: 1, 43: 1, 65: 1 };
   const GLOBAL_LIMIT = 96;
   const RDAP_TIMEOUT = 1000;
-  const globalLimit = makeLimiter(GLOBAL_LIMIT);
+  let globalLimit = makeLimiter(GLOBAL_LIMIT);
+  /* Through the Worker, lookups share a few streamed requests, so far more can be in flight at once. */
+  const PROXY_GLOBAL_LIMIT = 240;
   const hostLimits = {};
   const DOH_HOST_LIMIT = { "cloudflare-dns.com": 32, "dns.google": 32, "doh.dns.sb": 32 };
   const DOH_BASES = [
@@ -35,6 +37,16 @@
   }
   let suffixes = null;
   let publication = null;
+  /* Signed-in app: registry lookups go through the Worker in batches, so the browser never
+     hits CORS blocks or rate limits from registries, and "not found" answers stay off the console. */
+  let rdapProxy = null;
+  const PROXY_BATCH = 40;
+  /* Browsers open about 6 connections per site over HTTP/1.1 (local dev). Keep a few streams open and
+     build each batch only when a stream is free, so batches fill up instead of queueing half-empty. */
+  const PROXY_STREAMS = 4;
+  const proxyQueue = [];
+  let proxyTimer = 0;
+  let proxyInFlight = 0;
   let bootstrapError = null;
 
   function makeLimiter(max) {
@@ -454,6 +466,100 @@
     }
   }
 
+  function proxyGet(url, signal) {
+    return new Promise(function (resolve) {
+      const entry = { url: url, resolve: resolve, done: false };
+      proxyQueue.push(entry);
+      if (signal) {
+        signal.addEventListener("abort", function () {
+          if (entry.done) return;
+          entry.done = true;
+          resolve({ status: null, body: "", error: "AbortError" });
+        }, { once: true });
+      }
+      if (proxyInFlight === 0 || proxyQueue.length >= PROXY_BATCH) flushProxy();
+      else if (!proxyTimer) proxyTimer = setTimeout(flushProxy, 25);
+    });
+  }
+
+  function flushProxy() {
+    clearTimeout(proxyTimer);
+    proxyTimer = 0;
+    while (proxyQueue.length && proxyInFlight < PROXY_STREAMS) {
+      const batch = proxyQueue.splice(0, PROXY_BATCH).filter(function (entry) { return !entry.done; });
+      if (!batch.length) continue;
+      proxyInFlight += 1;
+      sendProxyBatch(batch).finally(function () {
+        proxyInFlight -= 1;
+        if (proxyQueue.length) flushProxy();
+      });
+    }
+  }
+
+  function settle(entry, hit) {
+    if (!entry || entry.done) return;
+    entry.done = true;
+    entry.resolve(hit ? { status: hit.status || null, body: hit.body || "", error: hit.error || null } : { status: null, body: "", error: "ProxyError" });
+  }
+
+  async function sendProxyBatch(batch) {
+    const controller = new AbortController();
+    const timer = setTimeout(function () { controller.abort(); }, 12000);
+    try {
+      const response = await fetch(rdapProxy, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ urls: batch.map(function (entry) { return entry.url; }) }),
+        signal: controller.signal,
+      });
+      if (!response.ok || !response.body) return;
+      /* One JSON line arrives per lookup, in the order they finish. */
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      for (;;) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        buffer += decoder.decode(chunk.value, { stream: true });
+        let newline = buffer.indexOf("\n");
+        while (newline >= 0) {
+          const line = buffer.slice(0, newline);
+          buffer = buffer.slice(newline + 1);
+          if (line) {
+            try {
+              const hit = JSON.parse(line);
+              settle(batch[hit.i], hit);
+            } catch (error) { /* ignore a broken line */ }
+          }
+          newline = buffer.indexOf("\n");
+        }
+      }
+    } catch (error) {
+      /* anything not answered below falls back to DNS */
+    } finally {
+      clearTimeout(timer);
+      batch.forEach(function (entry) { settle(entry, null); });
+    }
+  }
+
+  async function rdapGet(url, timeout, signal) {
+    if (!rdapProxy) return httpGet(url, "application/rdap+json, application/json", timeout, 0, signal);
+    if (stopped(signal)) return { status: null, body: "", error: "AbortError" };
+    const limiter = hostLimiter(new URL(url).hostname || "unknown");
+    const globalOk = await globalLimit.acquire(signal);
+    if (!globalOk) return { status: null, body: "", error: "AbortError" };
+    let hostHeld = false;
+    try {
+      const hostOk = await limiter.acquire(signal);
+      if (!hostOk) return { status: null, body: "", error: "AbortError" };
+      hostHeld = true;
+      return await proxyGet(url, signal);
+    } finally {
+      if (hostHeld) limiter.release();
+      globalLimit.release();
+    }
+  }
+
   function classifyRdap(status, body) {
     let data = null;
     try { data = body ? JSON.parse(body) : null; } catch (error) { data = null; }
@@ -526,7 +632,7 @@
     for (let index = 0; index < Math.min(bases.length, 1); index += 1) {
       if (stopped(signal)) return null;
       const base = bases[index].replace(/\/$/, "");
-      const hit = await httpGet(base + path, "application/rdap+json, application/json", timeout || RDAP_TIMEOUT, 0, signal);
+      const hit = await rdapGet(base + path, timeout || RDAP_TIMEOUT, signal);
       if (hit.error === "AbortError" || stopped(signal)) return null;
       const classified = classifyRdap(hit.status, hit.body);
       if (classified) {
@@ -704,7 +810,7 @@
       });
     }
     let cursor = 0;
-    const workers = Math.min(GLOBAL_LIMIT, Math.max(1, checks.length));
+    const workers = Math.min(rdapProxy ? PROXY_GLOBAL_LIMIT : GLOBAL_LIMIT, Math.max(1, checks.length));
     async function worker() {
       while (cursor < checks.length) {
         if (signal && signal.aborted) return;
@@ -748,6 +854,10 @@
     interleave: interleave,
     punyDecode: punyDecode,
     extractName: extractName,
+    setRdapProxy: function (path) {
+      rdapProxy = path || null;
+      globalLimit = makeLimiter(rdapProxy ? PROXY_GLOBAL_LIMIT : GLOBAL_LIMIT);
+    },
   };
   const root = typeof globalThis !== "undefined" ? globalThis : window;
   root.TldBrowser = api;

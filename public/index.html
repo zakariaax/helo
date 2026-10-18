@@ -203,7 +203,7 @@
   .topbar .spacer { flex: 1; }
   #menu-btn { display: none; margin-left: -8px; }
   main { margin-left: 280px; min-height: 100vh; }
-  .content { padding: 8px 40px 64px; max-width: 1280px; }
+  .content { padding: 8px 40px 64px; max-width: 1520px; margin: 0 auto; width: 100%; }
   body.is-check .content { padding: 0; max-width: none; }
   #page-check, #checker-frame { width: 100%; height: calc(100vh - 72px); border: 0; display: block; background: var(--bg); }
 
@@ -381,9 +381,15 @@
     .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   @media (max-width: 1100px) {
-    .span-4, .span-8 { grid-column: span 12; }
+    .dash-grid { grid-auto-flow: row dense; }
+    .span-8, .span-4.wide-mid { grid-column: span 12; }
+    .span-4 { grid-column: span 6; }
     .ws-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 16px; }
     .ws-stats > div:nth-child(3) { border-left: 0; padding-left: 0; }
+  }
+  @media (max-width: 720px) {
+    .span-4 { grid-column: span 12; }
+    .ring-wrap { width: 170px; height: 170px; }
   }
   @media (max-width: 600px) {
     .kpis { grid-template-columns: 1fr; gap: 16px; }
@@ -609,7 +615,7 @@
           <div class="chart" id="ws-chart"></div>
         </div>
 
-        <div class="card span-4 admin-only hidden">
+        <div class="card span-4 wide-mid admin-only hidden">
           <div class="card-head"><div><h2>Top users</h2><p class="sub">Checks in the last 7 days</p></div></div>
           <div class="toplist" id="ws-top"></div>
         </div>
@@ -617,7 +623,7 @@
     </section>
 
     <section id="page-check" class="hidden">
-      <iframe id="checker-frame" title="Check names"></iframe>
+      <iframe id="checker-frame" title="Check names" allow="clipboard-write"></iframe>
     </section>
 
     <section id="page-lists" class="hidden">
@@ -1043,10 +1049,13 @@ function openPage(page, listId) {
   if (page === "home") loadStats();
 }
 
+let statsTimer = 0;
 window.addEventListener("message", (event) => {
   if (event.origin !== location.origin || !event.data || event.data.type !== "helo-quota") return;
   const quota = event.data.quota;
   if (!quota) return;
+  clearTimeout(statsTimer);
+  statsTimer = setTimeout(loadStats, 1500);
   paintQuota(quota);
   document.getElementById("side-quota").textContent = quota.unlimited ? "Checks today: unlimited" : ("Checks today: " + quota.used + " / " + quota.limit);
 });
@@ -1606,6 +1615,7 @@ function paintQuota(quota) {
   const circumference = 2 * Math.PI * 50;
   const ratio = quota.unlimited ? (used ? 1 : 0) : pct / 100;
   fill.style.strokeDasharray = (circumference * ratio).toFixed(2) + " " + circumference.toFixed(2);
+  fill.style.opacity = ratio > 0 ? "1" : "0";
   fill.setAttribute("class", "ring-fill " + level);
   document.getElementById("ring-pct").textContent = quota.unlimited ? NUM.format(used) : pct + "%";
   document.getElementById("ring-caption").textContent = quota.unlimited ? "checks today" : "of today's limit";

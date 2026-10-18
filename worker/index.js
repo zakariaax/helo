@@ -50,6 +50,7 @@ async function handleApi(request, env, url) {
   if (request.method === "POST" && path === "/api/usage") return reserveUsage(request, env, user);
   if (request.method === "POST" && path === "/api/site") return siteStatus(request, env, user);
   if (request.method === "GET" && path === "/api/stats") return stats(env, user);
+  if (request.method === "POST" && path === "/api/rdap") return rdapProxy(request);
   if (request.method === "GET" && path === "/api/lists") return listLists(env, user);
   if (request.method === "POST" && path === "/api/lists") return createList(request, env, user);
   const listMatch = path.match(/^\/api\/lists\/([0-9a-f-]{36})$/);
@@ -170,8 +171,7 @@ async function reserveUsage(request, env, user) {
 async function chargeUsage(env, user, count) {
   const settings = await getSettings(env);
   const quota = await quotaFor(env, user, settings.dailyLimit);
-  if (quota.unlimited) return { ok: true, quota: { ...quota, reserved: count } };
-  if (quota.used + count > quota.limit) {
+  if (!quota.unlimited && quota.used + count > quota.limit) {
     return {
       ok: false,
       status: 429,
@@ -417,6 +417,98 @@ function cleanDomain(value) {
   if (text.startsWith("www.")) text = text.slice(4);
   if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/.test(text)) return "";
   return text;
+}
+
+/* RDAP proxy: the checker sends up to 40 registry URLs at a time. Only HTTPS servers listed in the
+   IANA RDAP bootstrap and plain /domain/<name> paths are fetched, so this is not an open proxy. */
+let rdapHosts = null;
+let rdapHostsAt = 0;
+/* Registries that just timed out or rate-limited us are skipped for a minute, so the checker falls
+   back to DNS at once instead of waiting on them again. Kept per Worker instance. */
+const rdapCooldown = new Map();
+const RDAP_PROXY_TIMEOUT = 2000;
+
+async function rdapHostSet() {
+  if (rdapHosts && Date.now() - rdapHostsAt < 6 * 3600 * 1000) return rdapHosts;
+  const response = await fetch("https://data.iana.org/rdap/dns.json", { cf: { cacheTtl: 21600, cacheEverything: true } });
+  if (!response.ok) throw new Error("bootstrap");
+  const data = await response.json();
+  const hosts = new Set();
+  for (const entry of data.services || []) {
+    for (const url of (entry && entry[1]) || []) {
+      try {
+        const parsed = new URL(url);
+        if (parsed.protocol === "https:") hosts.add(parsed.host.toLowerCase());
+      } catch (error) { /* skip a bad entry */ }
+    }
+  }
+  rdapHosts = hosts;
+  rdapHostsAt = Date.now();
+  return hosts;
+}
+
+async function rdapProxy(request) {
+  const body = await readBody(request);
+  const urls = Array.isArray(body.urls) ? body.urls.slice(0, 40) : [];
+  if (!urls.length) return json({ error: "No lookups to run." }, 400);
+  let hosts;
+  try {
+    hosts = await rdapHostSet();
+  } catch (error) {
+    return json({ error: "Could not load the IANA RDAP directory." }, 502);
+  }
+  /* Stream one JSON line per lookup as soon as it finishes, so a slow registry never holds back the rest. */
+  const { readable, writable } = new TransformStream();
+  const writer = writable.getWriter();
+  const encoder = new TextEncoder();
+  const done = Promise.all(urls.map(async (url, index) => {
+    const result = await rdapOne(String(url), hosts);
+    await writer.write(encoder.encode(JSON.stringify({ i: index, ...result }) + "\n"));
+  })).then(() => writer.close(), () => writer.close());
+  void done;
+  return new Response(readable, { headers: { "content-type": "application/x-ndjson; charset=utf-8", "cache-control": "no-store" } });
+}
+
+async function rdapOne(raw, hosts) {
+  let url;
+  try { url = new URL(raw); } catch (error) { return { status: null, error: "BadUrl" }; }
+  if (url.protocol !== "https:" || !hosts.has(url.host.toLowerCase()) || url.search || !/\/domain\/[^/]+$/.test(url.pathname)) {
+    return { status: null, error: "NotAllowed" };
+  }
+  const host = url.host.toLowerCase();
+  if ((rdapCooldown.get(host) || 0) > Date.now()) return { status: null, error: "Cooldown" };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), RDAP_PROXY_TIMEOUT);
+  try {
+    const response = await fetch(url.toString(), {
+      headers: { accept: "application/rdap+json, application/json", "user-agent": "helo-tld-checker" },
+      signal: controller.signal,
+      /* On Cloudflare, repeat lookups of the same domain within an hour come from the edge cache. */
+      cf: { cacheTtl: 3600, cacheTtlByStatus: { "200-299": 3600, "404": 3600, "400-599": 0 }, cacheEverything: true },
+    });
+    const text = await response.text();
+    if (response.status === 429) rdapCooldown.set(host, Date.now() + 60000);
+    return { status: response.status, body: trimRdap(text) };
+  } catch (error) {
+    rdapCooldown.set(host, Date.now() + 60000);
+    return { status: null, error: error && error.name === "AbortError" ? "TimeoutError" : "FetchError" };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function trimRdap(text) {
+  try {
+    const data = JSON.parse(text);
+    return JSON.stringify({
+      errorCode: data.errorCode,
+      objectClassName: data.objectClassName,
+      ldhName: data.ldhName,
+      status: Array.isArray(data.status) ? data.status.slice(0, 4) : undefined,
+    });
+  } catch (error) {
+    return "";
+  }
 }
 
 function lastDays(count) {
@@ -810,6 +902,7 @@ function checkChrome(user, embed) {
   @media (max-width: 600px) { #saas-bar { padding: 10px 16px; } }
 </style>
 <script>
+window.HELO_APP = true;
 (function () {
   const FONT = {
     "Public Sans": '"Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif',
@@ -891,6 +984,9 @@ function checkChrome(user, embed) {
         }).catch(function () { note.textContent = "Could not save."; });
     });
   }
+  /* This chrome is injected at the top of <body>, before the checker markup exists,
+     so the daily-limit guard is attached once the page has been parsed. */
+  function guardCheck() {
   const check = document.getElementById("check");
   if (!check) return;
   let armed = false;
@@ -917,6 +1013,9 @@ function checkChrome(user, embed) {
         check.click();
       }).catch(function () { if (note) note.textContent = "Could not check the daily limit."; });
   }, true);
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", guardCheck);
+  else guardCheck();
 })();
 </script>`;
 }
