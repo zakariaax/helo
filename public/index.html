@@ -77,8 +77,8 @@
       <label for="name">Name</label>
       <input id="name" autocomplete="name">
     </div>
-    <label for="email">Email</label>
-    <input id="email" type="email" autocomplete="username" required>
+    <label for="email" id="email-label">Username</label>
+    <input id="email" type="text" autocomplete="username" required>
     <label for="password">Password</label>
     <input id="password" type="password" autocomplete="current-password" required>
     <p class="error" id="auth-error"></p>
@@ -196,6 +196,8 @@ function setMode(next) {
   document.getElementById("auth-submit").textContent = creating ? "Create account" : "Sign in";
   document.getElementById("auth-switch").textContent = creating ? "I already have an account" : "Create an account";
   document.getElementById("name-field").classList.toggle("hidden", !creating);
+  document.getElementById("email-label").textContent = creating ? "Email" : "Username";
+  document.getElementById("email").type = creating ? "email" : "text";
   document.getElementById("password").autocomplete = creating ? "new-password" : "current-password";
 }
 
