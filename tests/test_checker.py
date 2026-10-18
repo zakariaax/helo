@@ -74,6 +74,20 @@ class ParseTests(unittest.TestCase):
         outcome = checker.parse_input("alpha beta", "org")
         self.assertEqual([name.ascii for name in outcome.names], ["alpha", "beta"])
 
+    def test_manual_domains_keep_their_own_extension(self) -> None:
+        outcome = checker.parse_domains("si.si\nme.io\nalpha.dev\nsi.com\nsi.si\nbrand\nfoo.co.uk\nHTTPS://WWW.Example.COM/path\n")
+        self.assertIsNone(outcome.error)
+        self.assertTrue(outcome.manual)
+        self.assertEqual([name.display for name in outcome.names], ["si.si", "me.io", "alpha.dev", "si.com", "foo.co.uk", "example.com"])
+        self.assertEqual(outcome.names[0].check_name, "si")
+        self.assertEqual(outcome.names[0].only_tlds[0].ascii, "si")
+        self.assertEqual(outcome.names[3].check_name, "si")
+        self.assertEqual(outcome.names[3].only_tlds[0].ascii, "com")
+        self.assertEqual(outcome.names[4].check_name, "foo")
+        self.assertEqual(outcome.names[4].only_tlds[0].ascii, "co.uk")
+        self.assertEqual(outcome.duplicate_count, 1)
+        self.assertTrue(any(item["value"] == "brand" for item in outcome.skipped))
+
     def test_limits(self) -> None:
         too_many = "\n".join(f"name{i}" for i in range(checker.MAX_NAMES + 1))
         outcome = checker.parse_input(too_many, "com")

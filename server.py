@@ -23,6 +23,14 @@ INDEX_PATH = Path(__file__).resolve().parent / "index.html"
 MAX_BODY = 2_000_000
 
 
+def _name_payload(name: checker.ParsedName) -> dict:
+    payload = {"ascii": name.ascii, "display": name.display}
+    if name.check_name:
+        payload["checkName"] = name.check_name
+        payload["tlds"] = [{"ascii": tld.ascii, "display": tld.display} for tld in name.only_tlds]
+    return payload
+
+
 def make_server(host: str, port: int) -> ThreadingHTTPServer:
     return ThreadingHTTPServer((host, port), Handler)
 
@@ -90,12 +98,16 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"error": "Not found."}, status=404)
 
     def _handle_parse(self, body: dict) -> None:
-        outcome = checker.parse_input(body.get("names", ""), body.get("tlds", ""))
+        if body.get("manual"):
+            outcome = checker.parse_domains(body.get("names", ""))
+        else:
+            outcome = checker.parse_input(body.get("names", ""), body.get("tlds", ""))
         boot = checker.get_bootstrap()
         coverage = checker.coverage_for([tld.ascii for tld in outcome.tlds], boot)
         self._send_json(
             {
-                "names": [{"ascii": name.ascii, "display": name.display} for name in outcome.names],
+                "manual": outcome.manual,
+                "names": [_name_payload(name) for name in outcome.names],
                 "tlds": [{"ascii": tld.ascii, "display": tld.display} for tld in outcome.tlds],
                 "skipped": outcome.skipped[:40],
                 "skippedCount": len(outcome.skipped),

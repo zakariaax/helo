@@ -108,6 +108,8 @@ class Bootstrap:
 class ParsedName:
     ascii: str
     display: str
+    check_name: str = ""
+    only_tlds: list[ParsedName] = field(default_factory=list)
 
 
 @dataclass
@@ -117,6 +119,7 @@ class ParseOutcome:
     skipped: list[dict] = field(default_factory=list)
     duplicate_count: int = 0
     error: str | None = None
+    manual: bool = False
 
 
 def load_presets() -> dict:
@@ -751,6 +754,78 @@ def extract_name(token: str) -> ParsedName:
     original = raw_labels[index]
     display = _decode_label(ascii_name) if original.startswith("xn--") else original
     return ParsedName(ascii_name, display)
+
+
+def split_domain(token: str) -> ParsedName:
+    """One exact domain, such as si.si or alpha.dev. The name is not crossed with other TLDs."""
+    text = _strip_wrappers(token)
+    if not text:
+        raise ValueError("empty")
+    if any(char.isspace() for char in text):
+        raise ValueError("invalid characters")
+    raw_labels = text.split(".")
+    if len(raw_labels) < 2:
+        raise ValueError("write the extension, like si.si")
+    if any(not part for part in raw_labels):
+        raise ValueError("invalid label")
+    try:
+        ascii_labels = [_encode_label(part) for part in raw_labels]
+    except Exception as exc:
+        raise ValueError("invalid characters") from exc
+    if not all(_valid_ascii_label(part) for part in ascii_labels):
+        raise ValueError("invalid label")
+    suffix_len = _suffix_length(ascii_labels)
+    if len(ascii_labels) <= suffix_len:
+        raise ValueError("this is a suffix, not a domain")
+    index = len(ascii_labels) - suffix_len - 1
+    label_ascii = ascii_labels[index]
+    label_raw = raw_labels[index]
+    label_display = _decode_label(label_ascii) if label_raw.startswith("xn--") else label_raw
+    tld_ascii = ".".join(ascii_labels[index + 1 :])
+    tld_raw = raw_labels[index + 1 :]
+    if any(part.startswith("xn--") for part in tld_raw):
+        tld_display = ".".join(_decode_label(part) for part in ascii_labels[index + 1 :])
+    else:
+        tld_display = ".".join(tld_raw)
+    domain = ParsedName(f"{label_ascii}.{tld_ascii}", f"{label_display}.{tld_display}")
+    domain.check_name = label_ascii
+    domain.only_tlds = [ParsedName(tld_ascii, tld_display)]
+    return domain
+
+
+def parse_domains(text: str) -> ParseOutcome:
+    outcome = ParseOutcome(manual=True)
+    seen: set[str] = set()
+    for line in str(text or "").replace("\r", "\n").split("\n"):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        for bit in _split_tokens(stripped):
+            if bit.startswith("#"):
+                break
+            try:
+                domain = split_domain(bit)
+            except ValueError as exc:
+                outcome.skipped.append({"value": bit[:80], "reason": str(exc)})
+                continue
+            if domain.ascii in seen:
+                outcome.duplicate_count += 1
+                continue
+            seen.add(domain.ascii)
+            outcome.names.append(domain)
+    if not outcome.names:
+        outcome.error = "Enter at least one domain, like si.si or alpha.dev."
+    elif len(outcome.names) > MAX_NAMES:
+        outcome.error = f"{MAX_NAMES} domains maximum per run. This list has {len(outcome.names)}. Split it and check again."
+    else:
+        seen_tlds: set[str] = set()
+        for name in outcome.names:
+            for tld in name.only_tlds:
+                if tld.ascii in seen_tlds:
+                    continue
+                seen_tlds.add(tld.ascii)
+                outcome.tlds.append(tld)
+    return outcome
 
 
 def parse_tld_token(token: str) -> ParsedName:

@@ -246,6 +246,83 @@
     return { ascii: ascii[at], display: raw[at].startsWith("xn--") ? decodeLabel(ascii[at]) : raw[at] };
   }
 
+  function splitDomain(token) {
+    const text = stripWrappers(token);
+    if (!text) throw new Error("empty");
+    if (/\s/.test(text)) throw new Error("invalid characters");
+    const raw = text.split(".");
+    if (raw.length < 2) throw new Error("write the extension, like si.si");
+    if (raw.some(function (part) { return !part; })) throw new Error("invalid label");
+    let ascii;
+    try {
+      ascii = raw.map(toAsciiLabel);
+    } catch (error) {
+      throw new Error("invalid characters");
+    }
+    if (!ascii.every(validAsciiLabel)) throw new Error("invalid label");
+    const suffix = suffixLength(ascii);
+    if (ascii.length <= suffix) throw new Error("this is a suffix, not a domain");
+    const at = ascii.length - suffix - 1;
+    const labelAscii = ascii[at];
+    const labelRaw = raw[at];
+    const labelDisplay = labelRaw.startsWith("xn--") ? decodeLabel(labelAscii) : labelRaw;
+    const tldAscii = ascii.slice(at + 1).join(".");
+    const tldRaw = raw.slice(at + 1);
+    const tldDisplay = tldRaw.some(function (part) { return part.startsWith("xn--"); })
+      ? ascii.slice(at + 1).map(decodeLabel).join(".")
+      : tldRaw.join(".");
+    return {
+      ascii: labelAscii + "." + tldAscii,
+      display: labelDisplay + "." + tldDisplay,
+      checkName: labelAscii,
+      tlds: [{ ascii: tldAscii, display: tldDisplay }],
+    };
+  }
+
+  function parseDomains(text) {
+    const names = [];
+    const tlds = [];
+    const skipped = [];
+    let duplicateCount = 0;
+    const seen = {};
+    const seenTlds = {};
+    String(text || "").replace(/\r/g, "\n").split("\n").forEach(function (line) {
+      const stripped = line.trim();
+      if (!stripped || stripped.charAt(0) === "#") return;
+      const bits = splitTokens(stripped);
+      for (let index = 0; index < bits.length; index += 1) {
+        if (bits[index].charAt(0) === "#") break;
+        try {
+          const domain = splitDomain(bits[index]);
+          if (seen[domain.ascii]) duplicateCount += 1;
+          else {
+            seen[domain.ascii] = 1;
+            names.push(domain);
+            domain.tlds.forEach(function (tld) {
+              if (seenTlds[tld.ascii]) return;
+              seenTlds[tld.ascii] = 1;
+              tlds.push(tld);
+            });
+          }
+        } catch (error) {
+          skipped.push({ value: bits[index].slice(0, 80), reason: error.message });
+        }
+      }
+    });
+    let error = null;
+    if (!names.length) error = "Enter at least one domain, like si.si or alpha.dev.";
+    else if (names.length > MAX_NAMES) error = MAX_NAMES + " domains maximum per run. This list has " + names.length + ". Split it and check again.";
+    return {
+      names: names,
+      tlds: tlds,
+      skipped: skipped.slice(0, 40),
+      skippedCount: skipped.length,
+      duplicateCount: duplicateCount,
+      error: error,
+      manual: true,
+    };
+  }
+
   function parseTld(token) {
     const text = stripWrappers(token).replace(/^\.+/, "");
     if (!text) throw new Error("empty");
@@ -568,6 +645,7 @@
       display: item.display || item.name,
       tld: item.tld,
       tldDisplay: item.tldDisplay || item.tld,
+      row: item.row || item.name,
       fqdn: fqdn,
       status: outcome.status,
       method: outcome.method,
@@ -646,6 +724,7 @@
               display: item.display || item.name,
               tld: item.tld,
               tldDisplay: item.tldDisplay || item.tld,
+              row: item.row || item.name,
               fqdn: item.name + "." + item.tld,
               status: "unknown",
               method: "rdap",
@@ -662,6 +741,7 @@
 
   const api = {
     parse: parse,
+    parseDomains: parseDomains,
     loadDefaults: loadDefaults,
     loadBootstrap: loadBootstrap,
     checkAll: checkAll,
