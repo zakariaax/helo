@@ -3,97 +3,102 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <title>Helo</title>
 <style>
   :root {
-    --bg: #f3f4f1;
+    --bg: #F4F6F8;
     --card: #ffffff;
-    --ink: #1c1f1a;
-    --muted: #66706a;
-    --line: #e6e8e3;
-    --green: #1f6b45;
-    --green-ink: #f4faf6;
-    --soft: #eef6f1;
-    --shadow: 0 16px 40px rgba(28, 40, 32, 0.06);
-    --radius: 18px;
+    --ink: #1C252E;
+    --muted: #637381;
+    --line: #DFE3E8;
+    --green: #00A76F;
+    --green-ink: #ffffff;
+    --soft: color-mix(in srgb, var(--green) 16%, var(--card));
+    --shadow: 0 0 2px 0 rgba(145, 158, 171, 0.2), 0 12px 24px -4px rgba(145, 158, 171, 0.12);
+    --radius: 12px;
     --font-size: 15px;
-    --font: "Segoe UI", Helvetica, sans-serif;
-    --heading: Palatino, Georgia, serif;
-    --pad: 22px;
+    --font: "Public Sans", "Segoe UI", Helvetica, sans-serif;
+    --heading: "Public Sans", "Segoe UI", Helvetica, sans-serif;
+    --pad: 24px;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink); font: var(--font-size)/1.45 var(--font); }
+  body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink); font: var(--font-size)/1.5 var(--font); }
   body.glow {
     background:
       radial-gradient(900px 420px at 0% -10%, color-mix(in srgb, var(--green) 28%, transparent), transparent 60%),
       var(--bg);
   }
-  button, input, select { font: inherit; color: inherit; }
+  button, input, select, textarea { font: inherit; color: inherit; }
   a { color: inherit; }
-  h1 { font: 600 28px var(--heading); margin: 0 0 6px; letter-spacing: -0.02em; }
+  h1, h2 { font-family: var(--heading); letter-spacing: -0.02em; }
+  h1 { font-weight: 700; font-size: 28px; margin: 0 0 8px; line-height: 1.25; }
   .auth-wrap { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
-  .auth-card { width: min(440px, 100%); background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px; }
-  .brand-row { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
-  .mark { width: 36px; height: 36px; border-radius: 10px; background: var(--green); color: var(--green-ink); display: grid; place-items: center; font-weight: 800; }
+  .auth-card { width: min(440px, 100%); background: var(--card); border: 0; border-radius: 16px; box-shadow: var(--shadow); padding: 32px; }
+  .brand-row { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; font-weight: 700; }
+  .mark { width: 40px; height: 40px; border-radius: 12px; background: var(--green); color: var(--green-ink); display: grid; place-items: center; font-weight: 800; box-shadow: 0 8px 16px color-mix(in srgb, var(--green) 24%, transparent); }
   .lede { color: var(--muted); margin: 0 0 18px; }
-  label { display: block; font-size: 13px; font-weight: 700; margin: 12px 0 6px; }
-  input, select, textarea { width: 100%; border: 1px solid var(--line); background: var(--card); border-radius: 12px; padding: 10px 12px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; color: var(--ink); }
+  input, select, textarea { width: 100%; border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 10px 14px; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 24%, transparent); }
   textarea { min-height: 140px; resize: vertical; }
   .tag { display: inline-block; border-radius: 999px; padding: 2px 8px; font-size: 12px; font-weight: 700; }
-  .tag.live { background: #e5f6ec; color: #14663a; }
-  .tag.sale { background: #f8efd4; color: #8a5a0d; }
-  .tag.offline { background: #eef0ee; color: #3d4741; }
-  .tag.available { background: #e7f0ff; color: #1d4e89; }
-  .tag.unknown { background: #f6e8e4; color: #9c3418; }
-  .primary, .ghost, .texty { border-radius: 999px; padding: 10px 14px; cursor: pointer; }
-  .primary { background: var(--green); color: var(--green-ink); border: 0; font-weight: 700; }
-  .ghost { background: var(--card); border: 1px solid var(--line); }
-  .texty { background: none; border: 0; color: var(--green); font-weight: 700; padding: 0; }
-  .error { color: #9c3418; font-size: 13px; min-height: 1.2em; margin: 8px 0; }
+  .tag.live { background: #C8FAD6; color: #007867; }
+  .tag.sale { background: #FFF5CC; color: #B76E00; }
+  .tag.offline { background: #F4F6F8; color: #637381; }
+  .tag.available { background: #CAFDF5; color: #006C9C; }
+  .tag.unknown { background: #FFE9D5; color: #B71D18; }
+  .primary, .ghost { border-radius: 8px; padding: 10px 16px; cursor: pointer; font-weight: 700; }
+  .primary { background: var(--green); color: var(--green-ink); border: 0; box-shadow: 0 8px 16px color-mix(in srgb, var(--green) 24%, transparent); }
+  .ghost { background: var(--card); border: 1px solid var(--line); color: var(--ink); }
+  .texty { background: none; border: 0; color: var(--green); font-weight: 700; padding: 0; cursor: pointer; }
+  .error { color: #B71D18; font-size: 13px; min-height: 1.2em; margin: 8px 0; }
   .ok { color: var(--green); }
   .shell { min-height: 100vh; }
   aside {
-    position: fixed; top: 0; left: 0; bottom: 0; width: 248px; z-index: 30;
-    background: var(--card); border-right: 1px solid var(--line);
-    display: flex; flex-direction: column; padding: 18px 12px;
+    position: fixed; top: 0; left: 0; bottom: 0; width: 280px; z-index: 30;
+    background: var(--card); border-right: 1px dashed rgba(145, 158, 171, 0.2);
+    display: flex; flex-direction: column; padding: 24px 16px 16px;
   }
-  .nav-group { margin: 16px 8px 6px; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: 0.08em; }
+  .nav-group { margin: 18px 12px 8px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; }
   nav { display: flex; flex-direction: column; gap: 4px; }
-  nav button, nav a { width: 100%; text-align: left; border: 0; background: transparent; border-radius: 10px; padding: 8px 10px; cursor: pointer; text-decoration: none; color: inherit; }
-  nav button.is-on, nav a.is-on { background: color-mix(in srgb, var(--ink) 6%, transparent); font-weight: 700; }
-  .quota { margin: 12px 8px 0; color: var(--muted); font-size: 13px; }
-  .side-user { margin-top: auto; padding: 12px 8px; border-top: 1px solid var(--line); display: flex; gap: 8px; align-items: center; }
+  nav button, nav a { width: 100%; text-align: left; border: 0; background: transparent; border-radius: 8px; padding: 8px 12px; cursor: pointer; text-decoration: none; color: var(--muted); font-weight: 600; }
+  nav button.is-on, nav a.is-on { background: var(--soft); color: var(--green); font-weight: 700; }
+  .quota { margin: 16px 12px 0; color: var(--muted); font-size: 13px; }
+  .side-user { margin-top: auto; padding: 16px 8px 4px; border-top: 1px dashed rgba(145, 158, 171, 0.2); display: flex; gap: 10px; align-items: center; }
   .side-user .who { min-width: 0; }
   .side-user strong, .side-user small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .side-user small { color: var(--muted); }
   .side-user button { margin-left: auto; white-space: nowrap; flex: none; }
-  .avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--soft); color: var(--green); display: grid; place-items: center; font-weight: 800; flex: none; }
-    main { margin-left: 248px; min-height: 100vh; padding: 28px; }
+  .avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--soft); color: var(--green); display: grid; place-items: center; font-weight: 800; flex: none; }
+  main { margin-left: 280px; min-height: 100vh; padding: 32px 28px; }
   body.is-check main { padding: 0; }
   #page-check, #checker-frame { width: 100%; height: 100vh; border: 0; display: block; background: var(--bg); }
-  .kicker { color: var(--green); font-size: 12px; font-weight: 800; letter-spacing: 0.08em; margin: 0 0 6px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: var(--pad); }
-  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
-  .stat b { display: block; font-size: 28px; margin-top: 4px; font-family: var(--heading); }
-  .stat span { color: var(--muted); font-size: 13px; }
+  .kicker { color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 0.08em; margin: 0 0 8px; }
+  .card { background: var(--card); border: 0; border-radius: 16px; box-shadow: var(--shadow); padding: var(--pad); }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 16px; }
+  .stat b { display: block; font-size: 32px; margin-top: 6px; font-family: var(--heading); font-weight: 700; letter-spacing: -0.02em; }
+  .stat span { color: var(--muted); font-size: 13px; font-weight: 600; }
   table { width: 100%; border-collapse: collapse; }
-  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
-  th { color: var(--muted); font-size: 12px; }
+  th, td { text-align: left; padding: 12px 8px; border-bottom: 1px dashed rgba(145, 158, 171, 0.2); vertical-align: middle; }
+  th { color: var(--muted); font-size: 12px; font-weight: 600; }
   td input, td select { min-width: 0; }
   .row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
   .hidden { display: none !important; }
-  .top-actions { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 14px; }
+  .top-actions { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 16px; }
   .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; }
   .span-2 { grid-column: span 2; }
   .inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .inline input { width: auto; min-width: 88px; }
   .swatches { display: flex; gap: 8px; flex-wrap: wrap; }
-  .swatch { width: 42px; height: 42px; border-radius: 14px; border: 2px solid transparent; padding: 0; }
+  .swatch { width: 40px; height: 40px; border-radius: 12px; border: 2px solid transparent; padding: 0; box-shadow: var(--shadow); }
   .swatch.is-on { border-color: var(--ink); }
   .colors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
   .colors input[type="color"] { height: 42px; padding: 4px; }
   .preview { display: grid; grid-template-columns: 180px 1fr; min-height: 180px; overflow: hidden; padding: 0; }
-  .preview aside { position: relative; width: auto; height: auto; inset: auto; }
+  .preview aside { position: relative; width: auto; height: auto; inset: auto; border-right: 1px dashed rgba(145, 158, 171, 0.2); }
   .preview .sample { padding: 16px; }
   .hint { color: var(--muted); font-size: 13px; margin: 6px 0 0; }
   @media (max-width: 900px) {
@@ -103,7 +108,7 @@
   }
 </style>
 </head>
-<body class="glow">
+<body>
 <div id="auth" class="auth-wrap hidden">
   <form class="auth-card" id="auth-form">
     <div class="brand-row"><div class="mark">H</div><strong>Helo</strong></div>
@@ -290,18 +295,18 @@
         </div>
         <div class="form-grid">
           <div><label for="font-size">Font size <span id="font-size-value">15</span></label><input id="font-size" type="range" min="13" max="22" value="15"></div>
-          <div><label for="radius">Corners <span id="radius-value">18</span></label><input id="radius" type="range" min="8" max="28" value="18"></div>
+          <div><label for="radius">Corners <span id="radius-value">12</span></label><input id="radius" type="range" min="8" max="28" value="12"></div>
           <div>
             <label for="font-family">Font</label>
-            <select id="font-family"><option>Segoe UI</option><option>Avenir</option><option>System</option><option>Georgia</option><option>Palatino</option></select>
+            <select id="font-family"><option>Public Sans</option><option>Segoe UI</option><option>Avenir</option><option>System</option><option>Georgia</option><option>Palatino</option></select>
           </div>
           <div>
             <label for="heading-font">Headings</label>
-            <select id="heading-font"><option>Palatino</option><option>Georgia</option><option>Segoe UI</option><option>Avenir</option><option>System</option></select>
+            <select id="heading-font"><option>Public Sans</option><option>Segoe UI</option><option>Avenir</option><option>System</option><option>Georgia</option><option>Palatino</option></select>
           </div>
         </div>
         <div class="inline" style="margin-top:12px">
-          <label class="inline" style="margin:0"><input id="glow" type="checkbox" checked style="width:auto"> Soft glow</label>
+          <label class="inline" style="margin:0"><input id="glow" type="checkbox" style="width:auto"> Soft glow</label>
           <label class="inline" style="margin:0"><input id="density" type="checkbox" style="width:auto"> Compact cards</label>
           <button class="primary" type="submit">Save appearance</button>
         </div>
@@ -314,7 +319,7 @@
           </aside>
           <div class="sample">
             <p class="kicker">LIVE PREVIEW</p>
-            <h2 style="margin:0 0 8px;font:600 26px var(--heading)">A calmer workspace</h2>
+            <h2 style="margin:0 0 8px;font:700 24px var(--heading)">A calmer workspace</h2>
             <p class="lede">Color, type, and corners update here before you save.</p>
             <button class="primary" type="button">Check names</button>
           </div>
@@ -335,6 +340,7 @@
 </div>
 <script>
 const FONTS = {
+  "Public Sans": '"Public Sans", "Segoe UI", Helvetica, sans-serif',
   "Segoe UI": '"Segoe UI", Helvetica, sans-serif',
   Palatino: "Palatino, Georgia, serif",
   Georgia: "Georgia, serif",
@@ -342,6 +348,7 @@ const FONTS = {
   System: "system-ui, sans-serif",
 };
 const PRESETS = {
+  minimals: { accent: "#00A76F", bg: "#F4F6F8", ink: "#1C252E", card: "#FFFFFF", muted: "#637381", line: "#DFE3E8" },
   grove: { accent: "#1f6b45", bg: "#f3f4f1", ink: "#1c1f1a", card: "#ffffff", muted: "#66706a", line: "#e6e8e3" },
   midnight: { accent: "#8eb6ff", bg: "#12151c", ink: "#f4f6fb", card: "#1c2230", muted: "#a7b0c0", line: "#2c3444" },
   ocean: { accent: "#0f6e8c", bg: "#eef5f7", ink: "#14242b", card: "#ffffff", muted: "#5d727a", line: "#d5e3e8" },
@@ -388,7 +395,7 @@ function fillThemeForm(theme) {
   document.getElementById("radius").value = theme.radius;
   document.getElementById("font-family").value = theme.font;
   document.getElementById("heading-font").value = theme.heading;
-  document.getElementById("glow").checked = theme.glow !== false;
+  document.getElementById("glow").checked = theme.glow === true;
   document.getElementById("density").checked = theme.density === "compact";
   document.getElementById("font-size-value").textContent = theme.fontSize;
   document.getElementById("radius-value").textContent = theme.radius;
@@ -406,10 +413,10 @@ function applyTheme(theme) {
   root.style.setProperty("--green-ink", inkFor(theme.accent));
   root.style.setProperty("--radius", theme.radius + "px");
   root.style.setProperty("--font-size", theme.fontSize + "px");
-  root.style.setProperty("--font", FONTS[theme.font] || FONTS["Segoe UI"]);
-  root.style.setProperty("--heading", FONTS[theme.heading] || FONTS.Palatino);
+  root.style.setProperty("--font", FONTS[theme.font] || FONTS["Public Sans"]);
+  root.style.setProperty("--heading", FONTS[theme.heading] || FONTS["Public Sans"]);
   root.style.setProperty("--pad", theme.density === "compact" ? "14px" : "22px");
-  document.body.classList.toggle("glow", theme.glow !== false);
+  document.body.classList.toggle("glow", theme.glow === true);
 }
 
 function showAuth() {

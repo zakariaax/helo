@@ -3,75 +3,80 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <title>Bulk TLD checker</title>
 <style>
   :root {
-    --bg: #efeae2;
-    --card: #fffdf8;
-    --ink: #1e1a16;
-    --muted: #5f574e;
-    --line: #e4d9cb;
-    --green: #0e6a3b;
-    --green-soft: #e4f5ea;
-    --red: #9c3418;
-    --red-soft: #fbe8e2;
-    --amber: #8a5a0d;
-    --amber-soft: #f8efd4;
-    --accent: #1b4f3a;
-    --accent-ink: #f4faf6;
-    --pending: #ddd6cb;
-    --shadow: 0 12px 32px rgba(62, 42, 18, 0.06);
+    --bg: #F4F6F8;
+    --card: #ffffff;
+    --ink: #1C252E;
+    --muted: #637381;
+    --line: #DFE3E8;
+    --green: #00A76F;
+    --green-soft: #C8FAD6;
+    --red: #FF5630;
+    --red-soft: #FFE9D5;
+    --amber: #B76E00;
+    --amber-soft: #FFF5CC;
+    --accent: #00A76F;
+    --accent-ink: #ffffff;
+    --pending: #DFE3E8;
+    --shadow: 0 0 2px 0 rgba(145, 158, 171, 0.2), 0 12px 24px -4px rgba(145, 158, 171, 0.12);
+    --font: "Public Sans", "Segoe UI", Helvetica, sans-serif;
+    --heading: "Public Sans", "Segoe UI", Helvetica, sans-serif;
+    --radius: 12px;
     color-scheme: light;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0;
     min-height: 100vh;
-    background:
-      radial-gradient(1200px 400px at 10% -10%, #e7f2ea 0%, transparent 55%),
-      var(--bg);
+    background: var(--bg);
     color: var(--ink);
-    font: 16px/1.45 "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+    font: 15px/1.5 var(--font);
   }
   button, input, select, textarea { font: inherit; color: inherit; }
   button { cursor: pointer; }
-  h1, h2, h3 { font-family: Palatino, "Palatino Linotype", "Iowan Old Style", Georgia, serif; font-weight: 600; letter-spacing: -0.02em; }
+  h1, h2, h3 { font-family: var(--heading); font-weight: 700; letter-spacing: -0.02em; }
   .wrap { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 32px 0 64px; }
   header.top { display: flex; justify-content: space-between; gap: 24px; align-items: flex-end; margin-bottom: 22px; }
   .mark {
-    width: 42px; height: 42px; border-radius: 12px; background: var(--accent); color: var(--accent-ink);
-    display: grid; place-items: center; font-weight: 700; letter-spacing: 0.04em; font-size: 12px;
+    width: 40px; height: 40px; border-radius: 12px; background: var(--accent); color: var(--accent-ink);
+    display: grid; place-items: center; font-weight: 800; letter-spacing: 0.04em; font-size: 12px;
+    box-shadow: 0 8px 16px color-mix(in srgb, var(--accent) 24%, transparent);
   }
   .brand { display: flex; gap: 12px; align-items: center; }
-  h1 { margin: 0; font-size: 34px; line-height: 1.05; }
+  h1 { margin: 0; font-size: 32px; line-height: 1.2; }
   .lede { margin: 6px 0 0; color: var(--muted); max-width: 62ch; }
   .recommend {
-    background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px;
+    background: var(--card); border: 0; border-radius: 16px; padding: 16px 18px;
     box-shadow: var(--shadow); margin-bottom: 16px;
   }
   .recommend strong { color: var(--accent); }
   .methods { display: grid; grid-template-columns: 1.15fr 1fr 1fr; gap: 12px; margin: 18px 0 16px; }
   .card {
-    background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px 16px;
+    background: var(--card); border: 0; border-radius: 16px; padding: 14px 16px 16px;
     box-shadow: var(--shadow);
   }
-  .card.best { border-color: #b7d7c4; background: linear-gradient(180deg, #f5fbf7, var(--card) 48px); }
-  .card h2 { margin: 0 0 8px; font-size: 22px; }
+  .card.best { background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 10%, var(--card)), var(--card) 48px); }
+  .card h2 { margin: 0 0 8px; font-size: 20px; }
   .card p, .recommend p { margin: 0; color: var(--muted); }
   .card p + p { margin-top: 8px; }
   .presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 0 0 8px; }
   .preset {
-    text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    text-align: left; background: var(--card); border: 1px solid transparent; border-radius: 12px;
     padding: 12px 14px 14px; box-shadow: var(--shadow);
   }
-  .preset.is-on { border-color: var(--accent); background: #f3faf6; box-shadow: inset 0 0 0 1px var(--accent); }
-  .preset .count { display: block; font-family: Palatino, "Palatino Linotype", Georgia, serif; font-size: 26px; line-height: 1; letter-spacing: -0.03em; }
+  .preset.is-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--card)); box-shadow: inset 0 0 0 1px var(--accent); }
+  .preset .count { display: block; font-family: var(--heading); font-size: 26px; line-height: 1; letter-spacing: -0.03em; font-weight: 700; }
   .preset strong { display: block; margin-top: 6px; }
   .preset small { display: block; margin-top: 4px; color: var(--muted); font-size: 13px; line-height: 1.35; }
   .preset-note { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
   .mode-switch { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 12px; }
   .mode {
-    border-radius: 999px; padding: 8px 14px; border: 1px solid var(--line); background: transparent;
+    border-radius: 8px; padding: 8px 14px; border: 1px solid var(--line); background: var(--card);
   }
   .mode.is-on { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 700; }
   .mode-note { color: var(--muted); font-size: 13px; }
@@ -81,16 +86,16 @@
   .label-row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
   .label-row span { color: var(--muted); font-size: 13px; }
   textarea {
-    width: 100%; min-height: 280px; resize: vertical; padding: 12px 14px; border-radius: 14px;
-    border: 1px solid var(--line); background: var(--card); line-height: 1.45;
+    width: 100%; min-height: 280px; resize: vertical; padding: 12px 14px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--card); line-height: 1.5;
   }
-  textarea:focus, input:focus, select:focus { outline: 2px solid #9dccb2; border-color: #7eae96; }
+  textarea:focus, input:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 24%, transparent); }
   .hint { color: var(--muted); font-size: 13px; min-height: 2.6em; }
   .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 4px 0 14px; }
   .primary, .ghost, .danger {
-    border-radius: 999px; padding: 10px 16px; border: 1px solid transparent;
+    border-radius: 8px; padding: 10px 16px; border: 1px solid transparent;
   }
-  .primary { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  .primary { background: var(--accent); color: var(--accent-ink); font-weight: 700; box-shadow: 0 8px 16px color-mix(in srgb, var(--accent) 24%, transparent); }
   .primary:disabled { opacity: 0.55; cursor: wait; }
   .ghost { background: transparent; border-color: var(--line); }
   .ghost:hover, .danger:hover { background: #fff; }
@@ -106,11 +111,11 @@
     #progress-elapsed, #progress-eta { text-align: left; }
   }
   .progress-sub { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
-  .bar { height: 8px; background: #ebe4da; border-radius: 99px; overflow: hidden; margin-top: 10px; }
+  .bar { height: 8px; background: #DFE3E8; border-radius: 99px; overflow: hidden; margin-top: 10px; }
   .bar span { display: block; height: 100%; width: 0; background: var(--accent); border-radius: inherit; }
   .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
   .toolbar input, .toolbar select {
-    background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px;
   }
   .toolbar input { min-width: min(280px, 100%); }
   .target-field {
@@ -124,12 +129,12 @@
   .free-ink { color: var(--green); }
   .unk-ink { color: var(--amber); }
   .banner {
-    border-radius: 14px; padding: 12px 14px; margin-bottom: 12px; background: #fff6e8; border: 1px solid #efd7a8; color: #6d4d12;
+    border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; background: #FFF5CC; border: 0; color: #7A4100;
   }
-  .banner.bad { background: var(--red-soft); border-color: #f0c7bc; color: var(--red); }
+  .banner.bad { background: var(--red-soft); color: var(--red); }
   .table-card { padding: 0; overflow: auto; }
   table { width: 100%; border-collapse: collapse; min-width: 980px; }
-  tr.opportunity td { background: #f3faf6; }
+  tr.opportunity td { background: color-mix(in srgb, var(--accent) 10%, var(--card)); }
   tr.opportunity td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
   .name-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   .pick {
@@ -138,7 +143,7 @@
   }
   .score-break { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; font-weight: 600; white-space: normal; max-width: 9.5rem; }
   th, td { text-align: left; vertical-align: top; padding: 12px 12px; border-bottom: 1px solid var(--line); }
-  th { position: sticky; top: 0; background: #fffdf8; z-index: 1; font-size: 13px; color: var(--muted); font-weight: 700; }
+  th { position: sticky; top: 0; background: var(--card); z-index: 1; font-size: 13px; color: var(--muted); font-weight: 600; }
   th button { background: none; border: 0; padding: 0; font-weight: 700; color: var(--muted); }
   th button[aria-sort="descending"], th button[aria-sort="ascending"] { color: var(--ink); }
   td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; width: 1%; }
@@ -147,7 +152,7 @@
     font: inherit; font-variant-numeric: tabular-nums; font-weight: 700; cursor: pointer;
   }
   .count-btn:hover:not(:disabled) { text-decoration: underline; }
-  .count-btn[aria-pressed="true"] { background: #f3eee6; }
+  .count-btn[aria-pressed="true"] { background: var(--bg); }
   .count-btn:disabled { cursor: default; }
   .name-btn { background: none; border: 0; padding: 0; font-weight: 700; text-align: left; }
   .name-btn:hover { text-decoration: underline; }
@@ -167,7 +172,7 @@
   .chip.registered { background: var(--red-soft); color: var(--red); }
   .chip.available { background: var(--green-soft); color: var(--green); }
   .chip.unknown { background: var(--amber-soft); color: var(--amber); }
-  tr.detail td { background: #fbf8f3; }
+  tr.detail td { background: var(--bg); }
   .detail-table { width: 100%; min-width: 0; }
   .detail-table th { position: static; background: transparent; }
   .status-word.registered { color: var(--red); }
@@ -1581,17 +1586,17 @@ function buildReportHtml() {
   const when = new Date().toLocaleString();
   const sheet = summaryCsv();
   return "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>TLD check report</title><style>"
-    + "body{margin:0;background:#f6f1ea;color:#1e1a16;font:15px/1.45 'Segoe UI',Helvetica,sans-serif}"
+    + "body{margin:0;background:#F4F6F8;color:#1C252E;font:15px/1.5 'Public Sans','Segoe UI',Helvetica,sans-serif}"
     + "main{width:min(1280px,calc(100% - 32px));margin:0 auto;padding:28px 0 64px}"
-    + "h1{font:600 32px Palatino,Georgia,serif;margin:0 0 6px} h2{font:600 22px Palatino,Georgia,serif;margin:28px 0 8px}"
-    + "p{margin:0 0 8px;color:#5f574e} .actions{display:flex;gap:8px;margin:16px 0}"
-    + "button{font:inherit;border-radius:999px;padding:8px 14px;border:1px solid #e4d9cb;background:#fffdf8;cursor:pointer}"
-    + "button.primary{background:#1b4f3a;color:#f4faf6;border-color:transparent;font-weight:700}"
-    + "table{width:100%;border-collapse:collapse;background:#fffdf8;border-radius:12px;overflow:hidden}"
-    + "th,td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid #e4d9cb;font-size:13px}"
-    + "th{font-size:12px;color:#5f574e} td.num{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}"
-    + "td.name{font-weight:700} .taken{color:#9c3418} .free{color:#0e6a3b} .unknown{color:#8a5a0d} .miss{color:#8a8176}"
-    + "tr.pick-row td{background:#e7f6ee}"
+    + "h1{font:700 32px 'Public Sans','Segoe UI',sans-serif;margin:0 0 6px} h2{font:700 22px 'Public Sans','Segoe UI',sans-serif;margin:28px 0 8px}"
+    + "p{margin:0 0 8px;color:#637381} .actions{display:flex;gap:8px;margin:16px 0}"
+    + "button{font:inherit;border-radius:8px;padding:8px 14px;border:1px solid #DFE3E8;background:#fff;cursor:pointer}"
+    + "button.primary{background:#00A76F;color:#fff;border-color:transparent;font-weight:700}"
+    + "table{width:100%;border-collapse:collapse;background:#fff;border-radius:16px;overflow:hidden}"
+    + "th,td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid #DFE3E8;font-size:13px}"
+    + "th{font-size:12px;color:#637381} td.num{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}"
+    + "td.name{font-weight:700} .taken{color:#FF5630} .free{color:#00A76F} .unknown{color:#B76E00} .miss{color:#637381}"
+    + "tr.pick-row td{background:#C8FAD6}"
     + "@media print{body{background:#fff}.actions{display:none}}"
     + "</style></head><body><main>"
     + "<h1>TLD check report</h1><p>" + escapeHtml(when) + " · " + names.length + " names in this view. Target ." + escapeHtml(targetTld() || "(none)") + ".</p>"

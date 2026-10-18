@@ -3,20 +3,20 @@ const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 const PBKDF2_ITERATIONS = 8000;
 const USER_COLUMNS = "id, username, contact_email AS email, name, role, daily_limit, password_hash, password_salt";
 const DEFAULT_THEME = {
-  accent: "#1f6b45",
-  bg: "#f3f4f1",
-  ink: "#1c1f1a",
+  accent: "#00a76f",
+  bg: "#f4f6f8",
+  ink: "#1c252e",
   card: "#ffffff",
-  muted: "#66706a",
-  line: "#e6e8e3",
+  muted: "#637381",
+  line: "#dfe3e8",
   fontSize: 15,
-  font: "Segoe UI",
-  heading: "Palatino",
-  radius: 18,
-  glow: true,
+  font: "Public Sans",
+  heading: "Public Sans",
+  radius: 12,
+  glow: false,
   density: "comfortable",
 };
-const FONT_NAMES = ["Segoe UI", "Palatino", "Georgia", "Avenir", "System"];
+const FONT_NAMES = ["Public Sans", "Segoe UI", "Palatino", "Georgia", "Avenir", "System"];
 
 export default {
   async fetch(request, env) {
@@ -710,29 +710,29 @@ function checkChrome(user, embed) {
   return `${sidebar}
 <div id="saas-bar"><input id="saas-title" maxlength="80" placeholder="List name" aria-label="List name"><button type="button" id="saas-save">Save list</button><span id="saas-note"></span></div>
 <style>
-  ${embed ? "" : "body { padding-left: 248px; }"}
-  .helo-side { position: fixed; top: 0; left: 0; bottom: 0; width: 248px; z-index: 40; background: var(--card, #fff); border-right: 1px solid var(--line, #e6e8e3); display: flex; flex-direction: column; padding: 18px 12px; }
-  .helo-brand, .helo-user { display: flex; align-items: center; gap: 10px; }
-  .helo-mark, .helo-avatar { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; font-weight: 800; flex: none; }
-  .helo-mark { background: var(--green, #1f6b45); color: var(--green-ink, #f4faf6); }
-  .helo-avatar { background: var(--soft, #eef6f1); color: var(--green, #1f6b45); border-radius: 50%; }
-  .helo-kicker { margin: 16px 8px 6px; color: var(--muted, #66706a); font-size: 11px; font-weight: 800; letter-spacing: 0.08em; }
+  ${embed ? "" : "body { padding-left: 280px; }"}
+  .helo-side { position: fixed; top: 0; left: 0; bottom: 0; width: 280px; z-index: 40; background: var(--card, #fff); border-right: 1px dashed rgba(145, 158, 171, 0.2); display: flex; flex-direction: column; padding: 24px 16px 16px; }
+  .helo-brand, .helo-user { display: flex; align-items: center; gap: 12px; }
+  .helo-mark, .helo-avatar { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; flex: none; }
+  .helo-mark { background: var(--green, #00A76F); color: var(--green-ink, #fff); }
+  .helo-avatar { background: var(--soft, #C8FAD6); color: var(--green, #00A76F); border-radius: 50%; }
+  .helo-kicker { margin: 18px 12px 8px; color: var(--muted, #637381); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; }
   .helo-side nav { display: flex; flex-direction: column; gap: 4px; }
-  .helo-side nav a { text-align: left; text-decoration: none; color: inherit; border-radius: 10px; padding: 8px 10px; }
-  .helo-side nav a.is-on { background: color-mix(in srgb, var(--ink, #1c1f1a) 6%, transparent); font-weight: 700; }
-  .helo-quota { margin: 12px 8px; color: var(--muted, #66706a); font-size: 13px; }
-  .helo-user { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line, #e6e8e3); }
+  .helo-side nav a { text-align: left; text-decoration: none; color: var(--muted, #637381); border-radius: 8px; padding: 8px 12px; font-weight: 600; }
+  .helo-side nav a.is-on { background: color-mix(in srgb, var(--green, #00A76F) 16%, var(--card, #fff)); color: var(--green, #00A76F); font-weight: 700; }
+  .helo-quota { margin: 16px 12px; color: var(--muted, #637381); font-size: 13px; }
+  .helo-user { margin-top: auto; padding-top: 16px; border-top: 1px dashed rgba(145, 158, 171, 0.2); }
   .helo-user strong, .helo-user small { display: block; }
-  .helo-user small { color: var(--muted, #66706a); }
-  .helo-user button { margin-left: auto; border: 0; background: none; color: var(--green, #1f6b45); font-weight: 700; cursor: pointer; }
-  #saas-bar { position: sticky; top: 0; z-index: 20; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 16px; background: var(--card, #fff); border-bottom: 1px solid var(--line, #e6e8e3); }
-  #saas-bar button { font: inherit; border-radius: 999px; padding: 7px 12px; border: 0; background: var(--green, #1f6b45); color: var(--green-ink, #f4faf6); cursor: pointer; font-weight: 700; }
-  #saas-bar input { font: inherit; border: 1px solid var(--line, #e6e8e3); border-radius: 999px; padding: 7px 12px; min-width: 180px; background: var(--card, #fff); color: inherit; }
-  #saas-note { color: var(--muted, #66706a); font-size: 13px; }
+  .helo-user small { color: var(--muted, #637381); }
+  .helo-user button { margin-left: auto; border: 0; background: none; color: var(--green, #00A76F); font-weight: 700; cursor: pointer; }
+  #saas-bar { position: sticky; top: 0; z-index: 20; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 12px 20px; background: var(--card, #fff); border-bottom: 1px dashed rgba(145, 158, 171, 0.2); }
+  #saas-bar button { font: inherit; border-radius: 8px; padding: 8px 14px; border: 0; background: var(--green, #00A76F); color: var(--green-ink, #fff); cursor: pointer; font-weight: 700; box-shadow: 0 8px 16px color-mix(in srgb, var(--green, #00A76F) 24%, transparent); }
+  #saas-bar input { font: inherit; border: 1px solid var(--line, #DFE3E8); border-radius: 8px; padding: 8px 12px; min-width: 180px; background: var(--card, #fff); color: inherit; }
+  #saas-note { color: var(--muted, #637381); font-size: 13px; }
 </style>
 <script>
 (function () {
-  const FONT = { "Segoe UI": '"Segoe UI", Helvetica, sans-serif', Palatino: "Palatino, Georgia, serif", Georgia: "Georgia, serif", Avenir: '"Avenir Next", "Segoe UI", sans-serif', System: "system-ui, sans-serif" };
+  const FONT = { "Public Sans": '"Public Sans", "Segoe UI", Helvetica, sans-serif', "Segoe UI": '"Segoe UI", Helvetica, sans-serif', Palatino: "Palatino, Georgia, serif", Georgia: "Georgia, serif", Avenir: '"Avenir Next", "Segoe UI", sans-serif', System: "system-ui, sans-serif" };
   function inkFor(hex) {
     const n = parseInt(String(hex || "").slice(1), 16);
     if (!Number.isFinite(n)) return "#f4faf6";
@@ -752,10 +752,12 @@ function checkChrome(user, embed) {
     root.style.setProperty("--green-ink", inkFor(theme.accent));
     root.style.setProperty("--accent-ink", inkFor(theme.accent));
     root.style.setProperty("--radius", theme.radius + "px");
+    root.style.setProperty("--font", FONT[theme.font] || FONT["Public Sans"]);
+    root.style.setProperty("--heading", FONT[theme.heading] || FONT["Public Sans"]);
     document.body.style.fontSize = theme.fontSize + "px";
-    document.body.style.fontFamily = FONT[theme.font] || FONT["Segoe UI"];
+    document.body.style.fontFamily = FONT[theme.font] || FONT["Public Sans"];
     document.body.style.color = theme.ink;
-    document.body.style.background = theme.glow
+    document.body.style.background = theme.glow === true
       ? "radial-gradient(900px 420px at 8% -10%, color-mix(in srgb, " + theme.accent + " 30%, transparent), transparent 62%), " + theme.bg
       : theme.bg;
   }
