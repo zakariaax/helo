@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Helo</title>
+<style>
+  :root {
+    --bg: #f3f4f1;
+    --card: #ffffff;
+    --ink: #1c1f1a;
+    --muted: #66706a;
+    --line: #e6e8e3;
+    --green: #1f6b45;
+    --green-ink: #f4faf6;
+    --soft: #eef6f1;
+    --shadow: 0 16px 40px rgba(28, 40, 32, 0.06);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink); font: 15px/1.45 "Segoe UI", Helvetica, sans-serif; }
+  button, input { font: inherit; color: inherit; }
+  a { color: inherit; }
+  .auth-wrap { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+  .auth-card { width: min(440px, 100%); background: var(--card); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); padding: 28px; }
+  .brand-row { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+  .mark { width: 36px; height: 36px; border-radius: 10px; background: var(--green); color: var(--green-ink); display: grid; place-items: center; font-weight: 800; }
+  h1 { font: 600 28px Palatino, Georgia, serif; margin: 0 0 6px; }
+  .lede { color: var(--muted); margin: 0 0 18px; }
+  label { display: block; font-size: 13px; font-weight: 700; margin: 12px 0 6px; }
+  input { width: 100%; border: 1px solid var(--line); background: #fff; border-radius: 12px; padding: 10px 12px; }
+  .primary, .ghost, .texty { border-radius: 999px; padding: 10px 14px; cursor: pointer; }
+  .primary { background: var(--green); color: var(--green-ink); border: 0; font-weight: 700; }
+  .ghost { background: #fff; border: 1px solid var(--line); }
+  .texty { background: none; border: 0; color: var(--green); font-weight: 700; padding: 0; }
+  .error { color: #9c3418; font-size: 13px; min-height: 1.2em; margin: 8px 0; }
+  .shell { min-height: 100vh; display: grid; grid-template-columns: 248px 1fr; }
+  aside { background: #fff; border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 18px 12px; position: sticky; top: 0; height: 100vh; }
+  .nav-group { margin: 16px 8px 6px; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: 0.08em; }
+  nav button { width: 100%; text-align: left; border: 0; background: transparent; border-radius: 10px; padding: 8px 10px; cursor: pointer; }
+  nav button.is-on { background: #f2f3f0; font-weight: 700; }
+  .side-user { margin-top: auto; padding: 12px 8px; border-top: 1px solid var(--line); display: flex; gap: 8px; align-items: center; }
+  .side-user .who { min-width: 0; }
+  .side-user strong, .side-user small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .side-user small { color: var(--muted); }
+  .side-user button { margin-left: auto; white-space: nowrap; flex: none; }
+  .avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--soft); color: var(--green); display: grid; place-items: center; font-weight: 800; flex: none; }
+  main { padding: 28px; }
+  .kicker { color: var(--green); font-size: 12px; font-weight: 800; letter-spacing: 0.08em; margin: 0 0 6px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); padding: 22px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
+  .stat b { display: block; font-size: 28px; margin-top: 4px; }
+  .stat span { color: var(--muted); font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { color: var(--muted); font-size: 12px; }
+  .row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .hidden { display: none !important; }
+  .top-actions { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 14px; }
+  @media (max-width: 800px) {
+    .shell { grid-template-columns: 1fr; }
+    aside { position: relative; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+    nav { display: flex; gap: 6px; overflow: auto; }
+    .nav-group { display: none; }
+    nav button { width: auto; white-space: nowrap; }
+    .grid { grid-template-columns: 1fr; }
+    main { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+<div id="auth" class="auth-wrap hidden">
+  <form class="auth-card" id="auth-form">
+    <div class="brand-row"><div class="mark">H</div><strong>Helo</strong></div>
+    <h1 id="auth-title">Sign in</h1>
+    <p class="lede" id="auth-lede">Use the account you created for this workspace.</p>
+    <div id="name-field">
+      <label for="name">Name</label>
+      <input id="name" autocomplete="name">
+    </div>
+    <label for="email">Email</label>
+    <input id="email" type="email" autocomplete="username" required>
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="current-password" required>
+    <p class="error" id="auth-error"></p>
+    <button class="primary" type="submit" id="auth-submit">Sign in</button>
+    <p><button class="texty" type="button" id="auth-switch">Create an account</button></p>
+  </form>
+</div>
+
+<div id="app" class="shell hidden">
+  <aside>
+    <div class="brand-row"><div class="mark">H</div><strong>Helo</strong></div>
+    <div class="nav-group">OVERVIEW</div>
+    <nav>
+      <button type="button" data-page="home" class="is-on">Dashboard</button>
+      <button type="button" data-page="lists">Saved lists</button>
+      <button type="button" id="nav-users" data-page="users" class="hidden">Users</button>
+      <button type="button" data-page="settings">Settings</button>
+    </nav>
+    <div class="side-user">
+      <div class="avatar" id="avatar">H</div>
+      <div class="who">
+        <strong id="who-name">Account</strong>
+        <small id="who-meta">Free plan</small>
+      </div>
+      <button class="texty" type="button" id="sign-out">Sign out</button>
+    </div>
+  </aside>
+  <main>
+    <section id="page-home">
+      <p class="kicker">YOUR ACCOUNT IS READY</p>
+      <div class="card">
+        <h1>Check names, then keep the lists that matter.</h1>
+        <p class="lede">The scan still runs in your browser. A saved list stays on this account, with the investor score and Pick rows on the checker.</p>
+        <a class="primary" href="/check" style="display:inline-block;text-decoration:none">Check names</a>
+      </div>
+      <div class="grid">
+        <div class="card stat"><span>Plan</span><b>Free</b></div>
+        <div class="card stat"><span>Saved lists</span><b id="home-lists">0</b></div>
+        <div class="card stat"><span>Role</span><b id="home-role">User</b></div>
+      </div>
+    </section>
+
+    <section id="page-lists" class="hidden">
+      <div class="top-actions">
+        <h1>Saved lists</h1>
+        <a class="primary" href="/check" style="text-decoration:none">New check</a>
+      </div>
+      <div class="card">
+        <table>
+          <thead><tr><th>Name</th><th>Mode</th><th>Target</th><th></th></tr></thead>
+          <tbody id="list-body"></tbody>
+        </table>
+        <p class="lede" id="list-empty">No saved lists yet. Run a check, then use Save list.</p>
+      </div>
+    </section>
+
+    <section id="page-users" class="hidden">
+      <div class="top-actions"><h1>Users</h1></div>
+      <div class="card">
+        <table>
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Joined</th><th></th></tr></thead>
+          <tbody id="user-body"></tbody>
+        </table>
+        <p class="error" id="user-error"></p>
+      </div>
+    </section>
+
+    <section id="page-settings" class="hidden">
+      <h1>Settings</h1>
+      <form class="card" id="password-form" style="max-width:460px">
+        <label for="current-password">Current password</label>
+        <input id="current-password" type="password" autocomplete="current-password" required>
+        <label for="next-password">New password</label>
+        <input id="next-password" type="password" autocomplete="new-password" required>
+        <p class="error" id="password-error"></p>
+        <button class="primary" type="submit">Change password</button>
+      </form>
+    </section>
+  </main>
+</div>
+<script>
+const auth = document.getElementById("auth");
+const app = document.getElementById("app");
+let mode = "login";
+let me = null;
+
+function showAuth() {
+  auth.classList.remove("hidden");
+  app.classList.add("hidden");
+}
+function showApp() {
+  auth.classList.add("hidden");
+  app.classList.remove("hidden");
+  document.getElementById("who-name").textContent = me.name || me.email;
+  document.getElementById("who-meta").textContent = me.role === "admin" ? "Admin" : "Free plan";
+  document.getElementById("avatar").textContent = (me.name || me.email || "H").slice(0, 1).toUpperCase();
+  document.getElementById("home-role").textContent = me.role === "admin" ? "Admin" : "User";
+  document.getElementById("nav-users").classList.toggle("hidden", me.role !== "admin");
+  loadLists();
+}
+
+async function refresh() {
+  const response = await fetch("/api/me");
+  const data = await response.json();
+  me = data.user;
+  if (!me) showAuth();
+  else showApp();
+}
+
+function setMode(next) {
+  mode = next;
+  const creating = next === "signup";
+  document.getElementById("auth-title").textContent = creating ? "Create an account" : "Sign in";
+  document.getElementById("auth-lede").textContent = creating ? "The first account becomes the admin." : "Use the account you created for this workspace.";
+  document.getElementById("auth-submit").textContent = creating ? "Create account" : "Sign in";
+  document.getElementById("auth-switch").textContent = creating ? "I already have an account" : "Create an account";
+  document.getElementById("name-field").classList.toggle("hidden", !creating);
+  document.getElementById("password").autocomplete = creating ? "new-password" : "current-password";
+}
+
+document.getElementById("auth-switch").addEventListener("click", () => {
+  document.getElementById("auth-error").textContent = "";
+  setMode(mode === "login" ? "signup" : "login");
+});
+
+document.getElementById("auth-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const error = document.getElementById("auth-error");
+  error.textContent = "";
+  const payload = {
+    email: document.getElementById("email").value,
+    password: document.getElementById("password").value,
+    name: document.getElementById("name").value,
+  };
+  const response = await fetch(mode === "signup" ? "/api/signup" : "/api/login", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    error.textContent = data.error || "Could not sign in.";
+    return;
+  }
+  document.getElementById("password").value = "";
+  await refresh();
+});
+
+document.getElementById("sign-out").addEventListener("click", async () => {
+  await fetch("/api/logout", { method: "POST" });
+  me = null;
+  showAuth();
+});
+
+document.querySelectorAll("nav button").forEach((button) => {
+  button.addEventListener("click", () => openPage(button.dataset.page));
+});
+
+function openPage(page) {
+  document.querySelectorAll("nav button").forEach((button) => {
+    button.classList.toggle("is-on", button.dataset.page === page);
+  });
+  ["home", "lists", "users", "settings"].forEach((name) => {
+    document.getElementById("page-" + name).classList.toggle("hidden", name !== page);
+  });
+  if (page === "users") loadUsers();
+  if (page === "lists") loadLists();
+}
+
+async function loadLists() {
+  const response = await fetch("/api/lists");
+  if (!response.ok) return;
+  const data = await response.json();
+  const lists = data.lists || [];
+  document.getElementById("home-lists").textContent = String(lists.length);
+  const body = document.getElementById("list-body");
+  body.replaceChildren();
+  document.getElementById("list-empty").classList.toggle("hidden", lists.length > 0);
+  lists.forEach((list) => {
+    const row = document.createElement("tr");
+    const open = document.createElement("a");
+    open.href = "/check?list=" + encodeURIComponent(list.id);
+    open.textContent = "Open";
+    const remove = document.createElement("button");
+    remove.className = "ghost";
+    remove.type = "button";
+    remove.textContent = "Delete";
+    remove.addEventListener("click", async () => {
+      await fetch("/api/lists/" + list.id, { method: "DELETE" });
+      loadLists();
+    });
+    const actions = document.createElement("div");
+    actions.className = "row-actions";
+    actions.append(open, remove);
+    [list.title, list.mode, "." + (list.target || "si")].forEach((value) => {
+      const cell = document.createElement("td");
+      cell.textContent = value;
+      row.append(cell);
+    });
+    const actionCell = document.createElement("td");
+    actionCell.append(actions);
+    row.append(actionCell);
+    body.append(row);
+  });
+}
+
+async function loadUsers() {
+  const error = document.getElementById("user-error");
+  error.textContent = "";
+  const response = await fetch("/api/admin/users");
+  const data = await response.json();
+  if (!response.ok) {
+    error.textContent = data.error || "Could not load users.";
+    return;
+  }
+  const body = document.getElementById("user-body");
+  body.replaceChildren();
+  (data.users || []).forEach((user) => {
+    const row = document.createElement("tr");
+    const joined = new Date(user.created_at).toLocaleDateString();
+    [user.name, user.email, user.role, joined].forEach((value) => {
+      const cell = document.createElement("td");
+      cell.textContent = value;
+      row.append(cell);
+    });
+    const action = document.createElement("td");
+    const button = document.createElement("button");
+    button.className = "ghost";
+    button.type = "button";
+    const next = user.role === "admin" ? "user" : "admin";
+    button.textContent = next === "admin" ? "Make admin" : "Make user";
+    button.addEventListener("click", async () => {
+      const result = await fetch("/api/admin/users/" + user.id, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ role: next }),
+      });
+      const payload = await result.json();
+      if (!result.ok) error.textContent = payload.error || "Could not change that role.";
+      else loadUsers();
+    });
+    action.append(button);
+    row.append(action);
+    body.append(row);
+  });
+}
+
+document.getElementById("password-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const error = document.getElementById("password-error");
+  error.textContent = "";
+  const response = await fetch("/api/password", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      current: document.getElementById("current-password").value,
+      next: document.getElementById("next-password").value,
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    error.textContent = data.error || "Could not change the password.";
+    return;
+  }
+  error.textContent = "Password changed.";
+  event.target.reset();
+});
+
+setMode("login");
+refresh();
+</script>
+</body>
+</html>
