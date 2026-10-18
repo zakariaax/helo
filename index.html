@@ -113,6 +113,10 @@
     background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px;
   }
   .toolbar input { min-width: min(280px, 100%); }
+  .target-field {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700; color: var(--muted);
+  }
+  .target-field input { width: 4.8rem; min-width: 4.8rem; text-align: center; font-weight: 700; color: var(--ink); }
   .stats { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
   .pill { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; font-size: 14px; }
   .pill b { font-variant-numeric: tabular-nums; }
@@ -124,7 +128,15 @@
   }
   .banner.bad { background: var(--red-soft); border-color: #f0c7bc; color: var(--red); }
   .table-card { padding: 0; overflow: auto; }
-  table { width: 100%; border-collapse: collapse; min-width: 860px; }
+  table { width: 100%; border-collapse: collapse; min-width: 980px; }
+  tr.opportunity td { background: #f3faf6; }
+  tr.opportunity td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+  .name-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .pick {
+    display: inline-flex; align-items: center; border-radius: 999px; background: var(--accent); color: var(--accent-ink);
+    font-size: 11px; font-weight: 800; letter-spacing: 0.04em; padding: 2px 7px;
+  }
+  .score-break { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; font-weight: 600; white-space: normal; max-width: 9.5rem; }
   th, td { text-align: left; vertical-align: top; padding: 12px 12px; border-bottom: 1px solid var(--line); }
   th { position: sticky; top: 0; background: #fffdf8; z-index: 1; font-size: 13px; color: var(--muted); font-weight: 700; }
   th button { background: none; border: 0; padding: 0; font-weight: 700; color: var(--muted); }
@@ -264,8 +276,12 @@
 
   <div class="toolbar">
     <input id="search" type="search" placeholder="Filter names" aria-label="Filter names">
+    <label class="target-field">Target
+      <input id="target" type="text" value="si" maxlength="32" spellcheck="false" autocomplete="off" aria-label="Target extension">
+    </label>
     <select id="filter" aria-label="Filter results">
       <option value="all">All results</option>
+      <option value="opportunity">Investor picks</option>
       <option value="available">Has any available</option>
       <option value="rdap-available">Has RDAP available</option>
       <option value="registered">Has registered</option>
@@ -278,11 +294,12 @@
   <div class="pager" id="pager-top" hidden></div>
 
   <section class="card table-card" id="table-card">
-    <div class="empty" id="empty">Results show up here after a check. Names with the most registered TLDs rise to the top. Click a red, green, or amber count to list those extensions. Click a name for the full per-extension detail.</div>
+    <div class="empty" id="empty">Results show up here after a check. Names with the highest investor score rise to the top. A highlighted pick is a name whose target extension is free while .com or .ai is already taken. Click a red, green, or amber count to list those extensions. Click a name for the full per-extension detail.</div>
     <table id="results" hidden>
       <thead>
         <tr>
           <th><button type="button" data-sort="name">Name</button></th>
+          <th class="num"><button type="button" data-sort="score">Score</button></th>
           <th class="num"><button type="button" data-sort="registered">Registered</button></th>
           <th class="num"><button type="button" data-sort="available">Available</button></th>
           <th class="num"><button type="button" data-sort="unknown">Unknown</button></th>
@@ -294,7 +311,7 @@
     </table>
     <div class="pager" id="pager-bottom" hidden></div>
   </section>
-  <p class="legend" id="legend" hidden>Red is taken, green looks available, amber is unknown. Click a count to list those extensions. A failed lookup stays unknown and is never called available. RDAP availability is high confidence. DNS availability is a hint.</p>
+  <p class="legend" id="legend" hidden>The investor score counts only extensions that are already taken: .com 10, .ai 6, .io 4, .co 3, .app 3, .dev 2, .net 2, .org 2, .me 1, .xyz 1. A highlighted pick means the target extension is free while .com or .ai is taken. Red is taken, green looks available, amber is unknown. Click a count to list those extensions. A failed lookup stays unknown and is never called available. RDAP availability is high confidence. DNS availability is a hint.</p>
   <section class="methods" aria-label="How the lookup methods compare">
     <article class="card best">
       <h2>RDAP</h2>
@@ -321,6 +338,7 @@ const NAMES_KEY = "tld-checker-names";
 const TLDS_KEY = "tld-checker-tlds-v2";
 const PRESET_KEY = "tld-checker-preset";
 const MODE_KEY = "tld-checker-mode";
+const TARGET_KEY = "tld-checker-target";
 const BULK_HINT = "Second-level labels, like <code>brandname</code>. Full domains (<code>brand.com</code>), URLs, uppercase, and extra spaces are normalized. International names are checked in punycode. Up to 20,000 names per run. About 100 names across every extension stays inside an hour. For thousands of names, use Launch or Countries. A list that would run for many hours asks you to keep the largest extensions first.";
 const MANUAL_HINT = "One domain per line, like <code>si.si</code>, <code>me.io</code>, or <code>alpha.dev</code>. Only the extension written on that line is checked. A whole list of domains is fine. The TLD box is not used.";
 const CHIP_CAP = 12;
@@ -341,7 +359,7 @@ const state = {
   skipped: [],
   skippedCount: 0,
   duplicateCount: 0,
-  sortKey: "registered",
+  sortKey: "score",
   sortDir: "desc",
   started: false,
   running: false,
@@ -615,11 +633,78 @@ function rowForResult(result) {
   return match ? match.ascii : result.name;
 }
 
+const INVESTOR_WEIGHTS = [
+  ["com", 10], ["ai", 6], ["io", 4], ["co", 3], ["app", 3],
+  ["dev", 2], ["net", 2], ["org", 2], ["me", 1], ["xyz", 1],
+];
+const INVESTOR_WEIGHT = Object.fromEntries(INVESTOR_WEIGHTS);
+const INVESTOR_ORDER = new Map(INVESTOR_WEIGHTS.map(([tld], index) => [tld, index]));
+let namesByLabel = new Map();
+
+function targetTld() {
+  const input = document.getElementById("target");
+  return (input ? input.value : "")
+    .trim()
+    .toLowerCase()
+    .replace(/^\.+/, "")
+    .replace(/[^a-z0-9.-]/g, "");
+}
+
+function weightPhrase() {
+  return INVESTOR_WEIGHTS.map(([tld, weight]) => "." + tld + " " + weight).join(", ");
+}
+
+function storedResult(name, tld) {
+  const key = cacheKey(labelFor(name), tld);
+  return state.results.get(key) || cache[key] || null;
+}
+
+function investorFromResults(name) {
+  const parts = [];
+  let score = 0;
+  INVESTOR_WEIGHTS.forEach(([tld, weight]) => {
+    const hit = storedResult(name, tld);
+    if (!hit || hit.status !== "registered") return;
+    score += weight;
+    parts.push({ tld: tld, weight: weight });
+  });
+  return { score: score, parts: parts };
+}
+
+function isOpportunity(name) {
+  const target = targetTld();
+  if (!target) return false;
+  if (state.manual) {
+    const own = tldsFor(name);
+    if (own.length !== 1 || own[0].ascii !== target) return false;
+  }
+  const targetHit = storedResult(name, target);
+  if (!targetHit || targetHit.status !== "available") return false;
+  const com = storedResult(name, "com");
+  const ai = storedResult(name, "ai");
+  return !!((com && com.status === "registered") || (ai && ai.status === "registered"));
+}
+
+function scoreBreakdown(counts) {
+  if (!counts.scoreParts || !counts.scoreParts.length) return "";
+  return counts.scoreParts.map((part) => "." + part.tld + " " + part.weight).join(", ");
+}
+
+function applyInvestorHit(counts, hit) {
+  if (!counts) return;
+  const weight = INVESTOR_WEIGHT[hit.tld];
+  if (!weight || hit.status !== "registered" || counts.scoreTlds.has(hit.tld)) return;
+  counts.scoreTlds.add(hit.tld);
+  counts.score += weight;
+  counts.scoreParts.push({ tld: hit.tld, weight: weight });
+  counts.scoreParts.sort((a, b) => (INVESTOR_ORDER.get(a.tld) ?? 99) - (INVESTOR_ORDER.get(b.tld) ?? 99));
+}
+
 function metrics(name) {
   const tlds = tldsFor(name);
   const memo = metricMemo.get(name.ascii);
   if (memo && memo.total === tlds.length) return memo;
-  const counts = { registered: 0, available: 0, unknown: 0, done: 0, rdapAvailable: 0, total: tlds.length };
+  const counts = { registered: 0, available: 0, unknown: 0, done: 0, rdapAvailable: 0, total: tlds.length, score: 0, scoreParts: [], scoreTlds: new Set() };
   tlds.forEach((tld) => {
     const hit = state.results.get(cacheKey(labelFor(name), tld.ascii));
     if (!hit) return;
@@ -630,6 +715,10 @@ function metrics(name) {
       if (hit.method === "rdap") counts.rdapAvailable += 1;
     } else counts.unknown += 1;
   });
+  const investor = investorFromResults(name);
+  counts.score = investor.score;
+  counts.scoreParts = investor.parts;
+  counts.scoreTlds = new Set(investor.parts.map((part) => part.tld));
   metricMemo.set(name.ascii, counts);
   return counts;
 }
@@ -643,11 +732,19 @@ function bumpMetric(ascii, hit) {
     counts.available += 1;
     if (hit.method === "rdap") counts.rdapAvailable += 1;
   } else counts.unknown += 1;
+  applyInvestorHit(counts, hit);
 }
 
 function recomputeMetrics() {
   metricMemo.clear();
-  state.names.forEach((name) => metrics(name));
+  namesByLabel = new Map();
+  state.names.forEach((name) => {
+    const label = labelFor(name);
+    const group = namesByLabel.get(label);
+    if (group) group.push(name);
+    else namesByLabel.set(label, [name]);
+    metrics(name);
+  });
 }
 
 function visibleNames() {
@@ -656,6 +753,7 @@ function visibleNames() {
   const rows = state.names.filter((name) => {
     if (query && !name.display.toLowerCase().includes(query) && !name.ascii.includes(query)) return false;
     const counts = metrics(name);
+    if (filter === "opportunity") return isOpportunity(name);
     if (filter === "available") return counts.available > 0;
     if (filter === "rdap-available") return counts.rdapAvailable > 0;
     if (filter === "registered") return counts.registered > 0;
@@ -736,7 +834,7 @@ function statusPanel(name, status) {
   const hits = resultList(name, status);
   const detail = el("tr", "detail");
   const cell = el("td");
-  cell.colSpan = 6;
+  cell.colSpan = 7;
   const title = status === "registered" ? "Registered" : status === "available" ? "Available" : "Unknown";
   cell.append(el("p", "status-note", title + " · " + hits.length.toLocaleString() + ". " + STATUS_NOTES[status]));
   const scroll = el("div", "status-panel");
@@ -783,15 +881,17 @@ function renderTable() {
   if (!rows.length) {
     const tr = el("tr");
     const td = el("td", null, "No names match this filter.");
-    td.colSpan = 6;
+    td.colSpan = 7;
     tr.append(td);
     tbody.append(tr);
     return;
   }
   pageRows.forEach((name) => {
     const counts = metrics(name);
-    const tr = el("tr");
+    const pick = isOpportunity(name);
+    const tr = el("tr", pick ? "opportunity" : "");
     const nameCell = el("td");
+    const title = el("div", "name-line");
     const button = el("button", "name-btn", name.display);
     button.type = "button";
     button.setAttribute("aria-expanded", state.expanded.has(name.ascii) ? "true" : "false");
@@ -800,11 +900,23 @@ function renderTable() {
       else state.expanded.add(name.ascii);
       renderTable();
     });
-    nameCell.append(button);
+    title.append(button);
+    if (pick) {
+      const badge = el("span", "pick", "Pick");
+      badge.title = "." + targetTld() + " is free, and .com or .ai is already taken.";
+      title.append(badge);
+    }
+    nameCell.append(title);
     if (name.display !== name.ascii) nameCell.append(el("div", "subascii", name.ascii));
     nameCell.append(mixBar(counts));
     if (counts.done < counts.total) nameCell.append(el("div", "frac", counts.done + " / " + counts.total + " TLDs"));
     tr.append(nameCell);
+    const scoreCell = el("td", "num score-cell");
+    const breakdown = scoreBreakdown(counts);
+    scoreCell.title = breakdown || "None of the weighted extensions are taken.";
+    scoreCell.append(el("span", null, String(counts.score)));
+    if (breakdown) scoreCell.append(el("span", "score-break", breakdown));
+    tr.append(scoreCell);
     tr.append(countCell(name, "registered", counts.registered, "taken-ink"));
     tr.append(countCell(name, "available", counts.available, "free-ink"));
     tr.append(countCell(name, "unknown", counts.unknown, "unk-ink"));
@@ -825,7 +937,7 @@ function renderTable() {
     if (!state.expanded.has(name.ascii)) return;
     const detail = el("tr", "detail");
     const cell = el("td");
-    cell.colSpan = 6;
+    cell.colSpan = 7;
     const scroll = el("div", "detail-scroll");
     const inner = el("table", "detail-table");
     const head = el("tr");
@@ -1060,11 +1172,13 @@ function renderStats() {
   let registered = 0;
   let available = 0;
   let unknown = 0;
+  let picks = 0;
   state.names.forEach((name) => {
     const counts = metrics(name);
     registered += counts.registered;
     available += counts.available;
     unknown += counts.unknown;
+    if (isOpportunity(name)) picks += 1;
   });
   state.hasUnknown = unknown > 0;
   const recheckBtn = document.getElementById("recheck");
@@ -1072,7 +1186,7 @@ function renderStats() {
   recheckBtn.disabled = !!state.running;
   recheckBtn.textContent = state.running && state.mode === "recheck" ? "Rechecking…" : "Recheck unknowns";
   box.replaceChildren();
-  [["Names", state.names.length, ""], ["Registered", registered, "taken-ink"], ["Available", available, "free-ink"], ["Unknown", unknown, "unk-ink"]].forEach(([label, value, klass]) => {
+  [["Names", state.names.length, ""], ["Picks", picks, ""], ["Registered", registered, "taken-ink"], ["Available", available, "free-ink"], ["Unknown", unknown, "unk-ink"]].forEach(([label, value, klass]) => {
     const pill = el("span", "pill");
     pill.append(label + " ");
     pill.append(el("b", klass, String(value)));
@@ -1146,7 +1260,13 @@ function applyResult(result, fromCache) {
   }
   if (isNew) {
     state.lookupsDone += 1;
-    bumpMetric(rowForResult(result), result);
+    const group = namesByLabel.get(result.name) || [];
+    if (!group.length) bumpMetric(rowForResult(result), result);
+    else group.forEach((name) => {
+      const owns = tldsFor(name).some((tld) => tld.ascii === result.tld);
+      if (owns) bumpMetric(name.ascii, result);
+      else applyInvestorHit(metricMemo.get(name.ascii), result);
+    });
   }
   const pending = state.names.find((name) => metrics(name).done < tldsFor(name).length);
   state.currentName = pending ? pending.display : "";
@@ -1391,8 +1511,10 @@ function escapeHtml(value) {
 
 function reportNames() {
   return state.names.slice().sort((a, b) => {
-    const delta = metrics(b).registered - metrics(a).registered;
+    const delta = metrics(b).score - metrics(a).score;
     if (delta) return delta;
+    const taken = metrics(b).registered - metrics(a).registered;
+    if (taken) return taken;
     return a.display.localeCompare(b.display);
   });
 }
@@ -1407,8 +1529,10 @@ function summaryCsv() {
     ["Famous", "Famous is the " + famous.length + " largest zones, ranked by how many domains are registered in each. Famous taken is how many of that list are already registered."],
     ["Countries", "Countries is the " + countries.length + " largest country-code extensions. Countries taken is how many of that list are already registered."],
     ["Free", "RDAP free is the registry’s own answer. DNS free is only a hint, because a registered name with no nameservers can look the same."],
+    ["Investor score", "Investor score adds the weights of extensions that are already taken: " + weightPhrase() + ". Free and unknown add nothing."],
+    ["Pick", "A pick is a name whose target extension is free while .com or .ai is taken. The target for this export is ." + (targetTld() || "(none)") + "."],
   ];
-  const header = ["Name", "Taken", "Free", "Unknown", "Launch taken", "Launch list size", "Launch checked", "Launch taken names", "Famous taken", "Famous list size", "Famous checked", "Countries taken", "Countries list size", "Countries checked"]
+  const header = ["Name", "Investor score", "Weighted extensions taken", "Pick", "Taken", "Free", "Unknown", "Launch taken", "Launch list size", "Launch checked", "Launch taken names", "Famous taken", "Famous list size", "Famous checked", "Countries taken", "Countries list size", "Countries checked"]
     .concat(SPOTLIGHT.map((tld) => "." + tld));
   const lines = notes.map((row) => row.map(csvEscape).join(","));
   lines.push(header.map(csvEscape).join(","));
@@ -1418,7 +1542,8 @@ function summaryCsv() {
     const famousScore = groupScore(name, famous);
     const countryScore = groupScore(name, countries);
     const row = [
-      name.display, counts.registered, counts.available, counts.unknown,
+      name.display, counts.score, scoreBreakdown(counts), isOpportunity(name) ? "Pick" : "",
+      counts.registered, counts.available, counts.unknown,
       launchScore.taken, launchScore.total, launchScore.checked, launchScore.takenNames.join(" "),
       famousScore.taken, famousScore.total, famousScore.checked,
       countryScore.taken, countryScore.total, countryScore.checked,
@@ -1449,7 +1574,8 @@ function buildReportHtml() {
       const klass = word === "Taken" ? "taken" : word === "Free" ? "free" : word === "Unknown" ? "unknown" : "miss";
       return "<td class=\"" + klass + "\">" + escapeHtml(word) + "</td>";
     }).join("");
-    return "<tr><td class=\"name\">" + escapeHtml(name.display) + "</td><td class=\"num taken\">" + counts.registered + "</td><td class=\"num free\">" + counts.available + "</td><td class=\"num unknown\">" + counts.unknown + "</td><td>" + escapeHtml(groupPhrase(launchScore)) + "</td><td>" + escapeHtml(groupPhrase(famousScore)) + "</td><td>" + escapeHtml(groupPhrase(countryScore)) + "</td>" + spots + "</tr>";
+    const pick = isOpportunity(name);
+    return "<tr" + (pick ? " class=\"pick-row\"" : "") + "><td class=\"name\">" + escapeHtml(name.display) + (pick ? " · Pick" : "") + "</td><td class=\"num\">" + counts.score + "</td><td>" + escapeHtml(scoreBreakdown(counts)) + "</td><td>" + (pick ? "Pick" : "") + "</td><td class=\"num taken\">" + counts.registered + "</td><td class=\"num free\">" + counts.available + "</td><td class=\"num unknown\">" + counts.unknown + "</td><td>" + escapeHtml(groupPhrase(launchScore)) + "</td><td>" + escapeHtml(groupPhrase(famousScore)) + "</td><td>" + escapeHtml(groupPhrase(countryScore)) + "</td>" + spots + "</tr>";
   }).join("");
   const spotHead = SPOTLIGHT.map((tld) => "<th>." + escapeHtml(tld) + "</th>").join("");
   const when = new Date().toLocaleString();
@@ -1465,16 +1591,18 @@ function buildReportHtml() {
     + "th,td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid #e4d9cb;font-size:13px}"
     + "th{font-size:12px;color:#5f574e} td.num{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}"
     + "td.name{font-weight:700} .taken{color:#9c3418} .free{color:#0e6a3b} .unknown{color:#8a5a0d} .miss{color:#8a8176}"
+    + "tr.pick-row td{background:#e7f6ee}"
     + "@media print{body{background:#fff}.actions{display:none}}"
     + "</style></head><body><main>"
-    + "<h1>TLD check report</h1><p>" + escapeHtml(when) + " · " + names.length + " names in this view.</p>"
+    + "<h1>TLD check report</h1><p>" + escapeHtml(when) + " · " + names.length + " names in this view. Target ." + escapeHtml(targetTld() || "(none)") + ".</p>"
     + "<div class=\"actions\"><button class=\"primary\" id=\"print-btn\" type=\"button\">Print or save as PDF</button><button id=\"sheet-btn\" type=\"button\">Download spreadsheet</button></div>"
     + "<h2>What the numbers mean</h2>"
     + "<p><strong>Launch (" + launch.length + ")</strong> is the short list worth buying for a new product. “12 taken of " + launch.length + "” means 12 of those extensions are already registered. The list is: " + escapeHtml(launch.join(", ") || "not loaded") + ".</p>"
     + "<p><strong>Famous (" + famous.length + ")</strong> is the largest zones, ranked by how many domains are registered in each. The number is how many of that list are already taken for the name.</p>"
     + "<p><strong>Countries (" + countries.length + ")</strong> is the largest country-code extensions. The number is how many of that list are already taken.</p>"
     + "<p><strong>Taken</strong> means registered. <strong>Free</strong> means the check found no registration. A free RDAP answer comes from the registry. A free DNS answer is only a hint. <strong>Unknown</strong> means the lookup did not answer, so it is not called free. <strong>Not checked</strong> means that extension was not in this scan.</p>"
-    + "<h2>Each name</h2><div style=\"overflow:auto\"><table><thead><tr><th>Name</th><th>Taken</th><th>Free</th><th>Unknown</th><th>Launch</th><th>Famous</th><th>Countries</th>" + spotHead + "</tr></thead><tbody>"
+    + "<p><strong>Investor score</strong> adds the weights of extensions that are already taken: " + escapeHtml(weightPhrase()) + ". Free and unknown add nothing. <strong>Pick</strong> means the target extension (." + escapeHtml(targetTld() || "none") + ") is free while .com or .ai is taken.</p>"
+    + "<h2>Each name</h2><div style=\"overflow:auto\"><table><thead><tr><th>Name</th><th>Score</th><th>Weighted taken</th><th>Pick</th><th>Taken</th><th>Free</th><th>Unknown</th><th>Launch</th><th>Famous</th><th>Countries</th>" + spotHead + "</tr></thead><tbody>"
     + rows + "</tbody></table></div>"
     + "<textarea id=\"sheet\" hidden>" + escapeHtml(sheet) + "</textarea>"
     + "<" + "script>document.getElementById('print-btn').onclick=function(){print()};document.getElementById('sheet-btn').onclick=function(){var text=document.getElementById('sheet').value;var blob=new Blob([text],{type:'text/csv;charset=utf-8'});var link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download='tld-summary.csv';link.click();};</" + "script>"
@@ -1549,6 +1677,11 @@ document.getElementById("clear-cache").addEventListener("click", () => {
 document.getElementById("export").addEventListener("click", exportReport);
 document.getElementById("search").addEventListener("input", () => { state.page = 0; scheduleRender(); });
 document.getElementById("filter").addEventListener("change", () => { state.page = 0; scheduleRender(); });
+document.getElementById("target").addEventListener("input", () => {
+  sessionStorage.setItem(TARGET_KEY, document.getElementById("target").value);
+  state.page = 0;
+  scheduleRender();
+});
 document.querySelectorAll("thead button").forEach((button) => {
   button.addEventListener("click", () => {
     const key = button.dataset.sort;
@@ -1589,8 +1722,10 @@ function setMode(mode) {
 
 const savedNames = sessionStorage.getItem(NAMES_KEY);
 const savedTlds = sessionStorage.getItem(TLDS_KEY);
+const savedTarget = sessionStorage.getItem(TARGET_KEY);
 if (savedNames != null) namesEl.value = savedNames;
 if (savedTlds != null) tldsEl.value = savedTlds;
+if (savedTarget != null) document.getElementById("target").value = savedTarget;
 setMode(sessionStorage.getItem(MODE_KEY) || "bulk");
 loadDirectory();
 </script>
